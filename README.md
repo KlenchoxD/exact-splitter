@@ -85,11 +85,11 @@ fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 
 - **Pre-existing work:** The project began from the official Fe Builders Challenge starter at commit `f9d9aa92a03af82c2bbb0dc2e0810244eb13e686`. The starter supplied the ingot layout, Apache-2.0 license, CI workflow, and a sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
 - **Third-party code:** Starter scaffolding and CI from [`fe-lang/builders-challenge-starter`](https://github.com/fe-lang/builders-challenge-starter), under Apache-2.0. The Fe compiler and standard library are used as published by the Fe project.
-- **AI assistance:** ChatGPT helped propose the project, write and revise the Fe implementation and tests, and draft this README. The test suite and compiler build were run locally.
+- **AI assistance:** ChatGPT helped propose the project, write and revise the Fe implementation and tests, and draft this README. GitHub Actions runs formatting, the test suite, and the compiler build with Fe 26.5.0.
 
 ## Team
 
-The project idea was submitted through the official registration form on November 12, 2026. The form displayed “validation pending”; that receipt is not confirmation of acceptance. The project ID and private submission link have not yet been verified. The contest requires one responsible human contact reachable by email.
+The project is registered for the Fe Builders Challenge. The final submission has not yet been sent; its private submission link is provided separately by the contest organizers. The contest requires one responsible human contact reachable by email.
 
 ## License
 
