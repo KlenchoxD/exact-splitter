@@ -1,6 +1,6 @@
 # ExactSplitter
 
-**Pitch:** ExactSplitter turns weighted ETH contributions into deterministic pull claims with no rounding dust, even when the pool amount is close to the full `u256` range.
+**Pitch:** ExactSplitter splits pooled ETH among three fixed payees by weight, with deterministic pull claims and no rounding dust, even when the pool amount is close to the full `u256` range.
 
 ## The problem
 
@@ -41,7 +41,7 @@ claimable.set(key: payee_b, value: payout_b)
 ## Architecture
 
 - `src/lib.fe` contains `cumulative_amount`, `share_amount`, the `ExactSplitter` contract, and a small payable `ClaimForwarder` used to exercise contract recipients.
-- `src/tests.fe` covers exact ratios, uneven and one-wei pools, maximum-`u256` arithmetic, invalid ranges, constructor validation, finalization, contract payees, and replayed claims.
+- `src/tests.fe` covers exact ratios, uneven and one-wei pools, maximum-`u256` arithmetic, invalid ranges, zero-weight constructor rejection, finalization, and contract payees.
 - `fe.toml` identifies the Fe ingot as `exact_splitter`.
 - `.github/workflows/ci.yml` runs formatting, tests, and compilation with Fe 26.5.0.
 
@@ -71,6 +71,7 @@ It verifies that splitting 7 units across weights 1:1:1 produces 2, 2, and 3, an
 - The allocation order is fixed at deployment; later payees can receive indivisible remainder units.
 - The contract accounts for deposits made through `deposit()`. ETH forced into the contract outside that function is not included in `total_funded` and cannot be claimed by this prototype.
 - A payee contract that rejects plain ETH transfers cannot claim until it can accept the transfer. A failed attempt leaves its entitlement unchanged.
+- A contract payee must be able to call `claim()` itself; a contract that cannot originate that call cannot withdraw.
 - This is an unreviewed contest prototype, not production-ready software. Fe itself is not yet recommended for production use.
 
 ## Demo
@@ -89,7 +90,7 @@ The original submitted commit, [`fbf0df4`](https://github.com/KlenchoxD/exact-sp
 
 - **Pre-existing work:** The project began from the official Fe Builders Challenge starter at commit `f9d9aa92a03af82c2bbb0dc2e0810244eb13e686`. The starter supplied the ingot layout, Apache-2.0 license, CI workflow, and a sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
 - **Third-party code:** Starter scaffolding and CI from [`fe-lang/builders-challenge-starter`](https://github.com/fe-lang/builders-challenge-starter), under Apache-2.0. The Fe compiler and standard library are used as published by the Fe project.
-- **AI assistance:** ChatGPT helped propose the project, write and revise the Fe implementation and tests, and draft this README. GitHub Actions runs formatting, the test suite, and the compiler build with Fe 26.5.0.
+- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation and tests, and draft this README. Claude Code (Opus) performed a read-only static review of the implementation, tests, and documentation and suggested follow-up changes; those suggestions have not been applied. GitHub Actions runs formatting, the test suite, and the compiler build with Fe 26.5.0.
 
 ## Team
 
