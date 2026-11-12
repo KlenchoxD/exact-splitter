@@ -81,6 +81,10 @@ The tests deploy the contract in Fe's local EVM, deposit 7 wei, finalize, check 
 fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 ```
 
+## Verification record
+
+The original submitted commit, [`fbf0df4`](https://github.com/KlenchoxD/exact-splitter/commit/fbf0df4275f73850434f4b54a25ee4a8152221a3), passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43171906655) with Fe 26.5.0. That run completed formatting, 12 tests, and the compiler build on the submitted commit.
+
 ## Declaration
 
 - **Pre-existing work:** The project began from the official Fe Builders Challenge starter at commit `f9d9aa92a03af82c2bbb0dc2e0810244eb13e686`. The starter supplied the ingot layout, Apache-2.0 license, CI workflow, and a sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
@@ -89,7 +93,7 @@ fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 
 ## Team
 
-The project is registered for the Fe Builders Challenge. The final submission has not yet been sent; its private submission link is provided separately by the contest organizers. The contest requires one responsible human contact reachable by email.
+The project is registered for the Fe Builders Challenge. The final entry was submitted on November 12, 2026, using commit `fbf0df4275f73850434f4b54a25ee4a8152221a3`. The organizers' form returned a receipt, but validation is pending and acceptance has not been confirmed. One responsible human contact reachable by email is on file with the organizers; private contact details and the submission link are intentionally not published here.
 
 ## License
 
