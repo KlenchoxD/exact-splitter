@@ -1,0 +1,275 @@
+use std::abi::sol
+use std::evm::StorageMap
+use std::evm::wei
+
+/// Weight denominator is capped so the remainder-times-prefix intermediate is
+/// proven to stay below 10^36, even when `amount` is the largest u256 value.
+pub const MAX_TOTAL_WEIGHT: u256 = 1_000_000_000_000_000_000
+
+/// Returns the amount assigned through a cumulative weight boundary.
+///
+/// Splitting `amount` into quotient and remainder first avoids the unsafe
+/// `amount * prefix / total` intermediate. The quotient product is at most
+/// `amount`; the remainder product is bounded by MAX_TOTAL_WEIGHT squared.
+pub fn cumulative_amount(amount: u256, prefix_weight: u256, total_weight: u256) -> u256 {
+    assert!(total_weight > 0, "Weight total is zero")
+    assert!(total_weight <= MAX_TOTAL_WEIGHT, "Weight total too large")
+    assert!(prefix_weight <= total_weight, "Prefix exceeds total")
+
+    let quotient = amount / total_weight
+    let remainder = amount % total_weight
+    quotient * prefix_weight + (remainder * prefix_weight) / total_weight
+}
+
+/// Returns a group's exact payout between two cumulative weight boundaries.
+///
+/// For contiguous groups, the first boundary starts at zero and the final
+/// boundary equals `total_weight`; therefore all payouts sum to `amount`.
+pub fn share_amount(
+    amount: u256,
+    previous_weight: u256,
+    cumulative_weight: u256,
+    total_weight: u256,
+) -> u256 {
+    assert!(
+        previous_weight <= cumulative_weight,
+        "Weight range is reversed",
+    )
+    assert!(cumulative_weight <= total_weight, "Prefix exceeds total")
+    let upper = cumulative_amount(
+        amount: amount,
+        prefix_weight: cumulative_weight,
+        total_weight: total_weight,
+    )
+    let lower = cumulative_amount(
+        amount: amount,
+        prefix_weight: previous_weight,
+        total_weight: total_weight,
+    )
+    upper - lower
+}
+
+msg SplitterMsg {
+    #[selector = sol("deposit()")]
+    Deposit -> Wei,
+    #[selector = sol("finalize()")]
+    Finalize -> Wei,
+    #[selector = sol("claim()")]
+    Claim -> Wei,
+    #[selector = sol("claimable(address)")]
+    Claimable { account: Address } -> Wei,
+    #[selector = sol("funded()")]
+    Funded -> Wei,
+}
+
+msg PayeeMsg {
+    #[selector = sol("claimFrom(address)")]
+    ClaimFrom { splitter: Address } -> Wei,
+    #[selector = sol("finalizeFrom(address)")]
+    FinalizeFrom { splitter: Address } -> Wei,
+}
+
+/// Minimal forwarding recipient used to demonstrate contract payees and to
+/// make the pull-claim path testable with an EVM receiver that accepts ETH.
+pub contract ClaimForwarder uses (ctx: Ctx, call: mut Call) {
+    mut received: Wei,
+
+    init() uses (mut received) { received = Wei::zero() }
+
+    recv PayeeMsg {
+        ClaimFrom { splitter } -> Wei uses (ctx, call) {
+            splitter.call(SplitterMsg::Claim {})
+        }
+
+        FinalizeFrom { splitter } -> Wei uses (call) {
+            splitter.call(SplitterMsg::Finalize {})
+        }
+    }
+
+    recv {
+        #[payable]
+        _ uses (ctx, mut received) {
+            received += ctx.value()
+        }
+    }
+}
+
+#[event]
+struct Deposited {
+    #[indexed]
+    contributor: Address,
+    amount: Wei,
+    total: Wei,
+}
+
+#[event]
+struct Finalized { total: Wei, payee_a_amount: Wei, payee_b_amount: Wei, payee_c_amount: Wei }
+
+#[event]
+struct Claimed {
+    #[indexed]
+    payee: Address,
+    amount: Wei,
+}
+
+/// A one-shot ETH pool that allocates every wei across three fixed payees.
+///
+/// The creator freezes contributions with `finalize`; each payee withdraws
+/// separately. Settlement uses telescoping cumulative floors, so rounding
+/// dust is assigned deterministically and the pool never strands a remainder.
+pub contract ExactSplitter uses (ctx: Ctx, call: mut Call, log: mut Log) {
+    creator: Address,
+    payee_a: Address,
+    payee_b: Address,
+    payee_c: Address,
+    weight_a: u256,
+    weight_b: u256,
+    total_weight: u256,
+    mut total_funded: Wei,
+    mut claimable: StorageMap<Address, Wei>,
+    mut is_finalized: bool,
+
+    init(
+        payee_a_value: Address,
+        weight_a_value: u256,
+        payee_b_value: Address,
+        weight_b_value: u256,
+        payee_c_value: Address,
+        weight_c_value: u256,
+    )
+    uses (
+        ctx,
+        mut creator,
+        mut payee_a,
+        mut payee_b,
+        mut payee_c,
+        mut weight_a,
+        mut weight_b,
+        mut total_weight,
+        mut total_funded,
+        mut is_finalized,
+    )
+    {
+        assert!(payee_a_value != Address::zero(), "Zero payee")
+        assert!(payee_b_value != Address::zero(), "Zero payee")
+        assert!(payee_c_value != Address::zero(), "Zero payee")
+        assert!(payee_a_value != payee_b_value, "Payees must be unique")
+        assert!(payee_a_value != payee_c_value, "Payees must be unique")
+        assert!(payee_b_value != payee_c_value, "Payees must be unique")
+        assert!(weight_a_value > 0, "Weight is zero")
+        assert!(weight_b_value > 0, "Weight is zero")
+        assert!(weight_c_value > 0, "Weight is zero")
+        let weights = weight_a_value + weight_b_value + weight_c_value
+        assert!(weights <= MAX_TOTAL_WEIGHT, "Weight total too large")
+
+        creator = ctx.caller()
+        payee_a = payee_a_value
+        payee_b = payee_b_value
+        payee_c = payee_c_value
+        weight_a = weight_a_value
+        weight_b = weight_b_value
+        total_weight = weights
+        total_funded = Wei::zero()
+        is_finalized = false
+    }
+
+    recv SplitterMsg {
+        #[payable]
+        Deposit -> Wei uses (ctx, mut total_funded, is_finalized, mut log) {
+            assert!(!is_finalized, "Pool is finalized")
+            let amount = ctx.value()
+            assert!(amount > Wei::zero(), "Deposit is zero")
+            total_funded += amount
+            log.emit(
+                Deposited { contributor: ctx.caller(), amount, total: total_funded },
+            )
+            total_funded
+        }
+
+        Finalize -> Wei uses (
+            ctx,
+            creator,
+            payee_a,
+            payee_b,
+            payee_c,
+            weight_a,
+            weight_b,
+            total_weight,
+            total_funded,
+            mut claimable,
+            mut is_finalized,
+            mut log,
+        ) {
+            assert!(ctx.caller() == creator, "Only creator can finalize")
+            assert!(!is_finalized, "Already finalized")
+            assert!(total_funded > Wei::zero(), "Pool is empty")
+
+            let amount = total_funded.as_wei()
+            let boundary_a = weight_a
+            let boundary_b = weight_a + weight_b
+            let payout_a = wei(
+                share_amount(
+                    amount: amount,
+                    previous_weight: 0,
+                    cumulative_weight: boundary_a,
+                    total_weight: total_weight,
+                ),
+            )
+            let payout_b = wei(
+                share_amount(
+                    amount: amount,
+                    previous_weight: boundary_a,
+                    cumulative_weight: boundary_b,
+                    total_weight: total_weight,
+                ),
+            )
+            let payout_c = wei(
+                share_amount(
+                    amount: amount,
+                    previous_weight: boundary_b,
+                    cumulative_weight: total_weight,
+                    total_weight: total_weight,
+                ),
+            )
+
+            claimable.set(key: payee_a, value: payout_a)
+            claimable.set(key: payee_b, value: payout_b)
+            claimable.set(key: payee_c, value: payout_c)
+            is_finalized = true
+
+            log.emit(
+                Finalized {
+                    total: total_funded,
+                    payee_a_amount: payout_a,
+                    payee_b_amount: payout_b,
+                    payee_c_amount: payout_c,
+                },
+            )
+            total_funded
+        }
+
+        Claim -> Wei uses (ctx, mut call, mut claimable, is_finalized, mut log) {
+            assert!(is_finalized, "Pool is not finalized")
+            let payee = ctx.caller()
+            let amount = claimable.get(key: payee)
+            assert!(amount > Wei::zero(), "Nothing to claim")
+
+            // Clear the entitlement before the external call to block reentry.
+            claimable.set(key: payee, value: Wei::zero())
+            assert!(
+                call.send_value(addr: payee, gas: ctx.gas(), value: amount).success(),
+                "Payment failed",
+            )
+            log.emit(Claimed { payee, amount })
+            amount
+        }
+
+        Claimable { account } -> Wei uses (claimable) {
+            claimable.get(key: account)
+        }
+
+        Funded -> Wei uses (total_funded) {
+            total_funded
+        }
+    }
+}
