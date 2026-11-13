@@ -82,7 +82,11 @@ It verifies that splitting 7 units across weights 1:1:1 produces 3, 2, and 2, an
 - A contract payee must be able to call `claim()` itself; a contract that cannot originate that call cannot withdraw.
 - This is an unreviewed contest prototype, not production-ready software. Fe itself is not yet recommended for production use.
 
-## Demo
+## Interactive demo
+
+Open [`demo/index.html`](demo/index.html) in a modern browser to explore exact payouts for 1–8 weighted payees. The page accepts integer amounts in wei up to `2^256 - 1`, shows each base share and fractional remainder, and marks the one-wei awards and tie order. It uses JavaScript `BigInt`, makes no network requests, and never connects a wallet. It is an educational reference view; the Fe implementation remains authoritative.
+
+## Contract demo
 
 The tests deploy the contract in Fe's local EVM, deposit 7 wei, finalize, check claimable shares of 3/2/2, and have a contract payee claim successfully. Run:
 
@@ -92,13 +96,13 @@ fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 
 ## Verification record
 
-Commit `ec4326d` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43341773414) with Fe 26.5.0, formatting, 18 tests, and the compiler build. This revision adds rejecting and reentrant receiver coverage and passed local `fe fmt --check`, all 20 tests, and `fe build` with Fe 26.5.0. It has not been submitted to Fe Builders.
+The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43343503705) with Fe 26.5.0, formatting, 20 tests, and the compiler build. The offline allocation explorer was added after that CI run and is a separate reference page; the Fe workflow does not execute its JavaScript. FE-051 has a receipt for commit `03ed4e5` with validation pending. This working revision, including the explorer, has not been submitted.
 
 ## Declaration
 
 - **Pre-existing work:** The project began from the official Fe Builders Challenge starter at commit `f9d9aa92a03af82c2bbb0dc2e0810244eb13e686`. The starter supplied the ingot layout, Apache-2.0 license, CI workflow, and a sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
 - **Third-party code:** Starter scaffolding and CI from [`fe-lang/builders-challenge-starter`](https://github.com/fe-lang/builders-challenge-starter), under Apache-2.0. The Fe compiler and standard library are used as published by the Fe project.
-- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation and tests, and draft this README. Claude Code (Opus) provided read-only reviews; its feedback informed the bounded allocator and documentation of the allocation tradeoff. GitHub Actions runs formatting, the test suite, and the compiler build with Fe 26.5.0.
+- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation, tests, offline allocation explorer, and README. Claude Code (Opus) provided read-only reviews; its feedback informed the bounded allocator and documentation of the allocation tradeoff. GitHub Actions runs formatting, the test suite, and the compiler build with Fe 26.5.0.
 
 ## Submission status
 

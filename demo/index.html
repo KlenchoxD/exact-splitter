@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>ExactSplitter allocation explorer</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #10151d;
+        --panel: #171f2b;
+        --panel-2: #202b3a;
+        --border: #344459;
+        --text: #eef4fc;
+        --muted: #a9b9cb;
+        --accent: #71e0bd;
+        --warn: #ffcb7c;
+        --danger: #ff9b9b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: radial-gradient(ellipse at 85% -15%, #24424b 0, transparent 38%), var(--bg);
+        color: var(--text);
+        font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main { width: min(1080px, calc(100% - 32px)); margin: 40px auto 72px; }
+      header { max-width: 760px; margin-bottom: 24px; }
+      .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+      h1 { margin: 8px 0; font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.08; }
+      h2 { margin: 0 0 14px; font-size: 1.1rem; }
+      p { color: var(--muted); margin: 8px 0 0; }
+      .grid { display: grid; grid-template-columns: minmax(270px, .9fr) minmax(0, 1.35fr); gap: 16px; align-items: start; }
+      .card { background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: 0 16px 48px #0003; }
+      label { display: block; color: var(--muted); font-size: .9rem; font-weight: 650; margin-bottom: 6px; }
+      input {
+        width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 9px;
+        background: #0d1219; color: var(--text); font: inherit; padding: 10px 12px;
+      }
+      input:focus-visible, button:focus-visible { outline: 3px solid #71e0bd88; outline-offset: 2px; }
+      .amount { margin-bottom: 18px; }
+      .hint { color: var(--muted); font-size: .8rem; margin: 5px 0 0; }
+      .quick-actions, .row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      button {
+        border: 1px solid var(--border); border-radius: 9px; background: var(--panel-2); color: var(--text);
+        cursor: pointer; font: inherit; font-weight: 650; padding: 9px 12px;
+      }
+      button:hover { border-color: var(--accent); }
+      button.primary { border-color: transparent; background: var(--accent); color: #08231c; }
+      button.remove { color: var(--danger); padding: 7px 10px; }
+      .payee-list { display: grid; gap: 9px; margin-top: 10px; }
+      .payee-row { display: grid; grid-template-columns: 1fr 120px auto; gap: 8px; align-items: end; }
+      .payee-row label { margin: 0; }
+      .payee-row input { margin-top: 5px; }
+      .controls { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+      .status { min-height: 1.5em; margin-top: 14px; color: var(--danger); font-size: .9rem; }
+      .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 18px; }
+      .metric { min-width: 0; background: var(--panel-2); border-radius: 10px; padding: 11px; }
+      .metric span { display: block; color: var(--muted); font-size: .78rem; }
+      .metric strong { display: block; overflow-wrap: anywhere; margin-top: 3px; font-size: 1.05rem; }
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+      th, td { border-bottom: 1px solid var(--border); padding: 10px 8px; text-align: right; vertical-align: top; }
+      th { color: var(--muted); font-size: .76rem; font-weight: 700; }
+      th:first-child, td:first-child { text-align: left; }
+      td { overflow-wrap: anywhere; }
+      .winner { color: var(--accent); font-weight: 750; }
+      .tie { color: var(--warn); }
+      .note { margin-top: 18px; padding: 13px 15px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: #71e0bd12; color: var(--muted); font-size: .88rem; }
+      code { color: var(--text); }
+      footer { color: var(--muted); font-size: .82rem; margin-top: 16px; }
+      @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { margin-top: 24px; } }
+      @media (max-width: 470px) { .card { padding: 15px; } .payee-row { grid-template-columns: 1fr 82px auto; gap: 6px; } .summary { grid-template-columns: 1fr; } th, td { padding: 9px 6px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow">ExactSplitter · offline explorer</div>
+        <h1>Every wei has a destination.</h1>
+        <p>Explore how weighted shares are allocated with the largest-remainder method. The calculation uses integer arithmetic only, including for amounts near the <code>u256</code> limit.</p>
+      </header>
+
+      <div class="grid">
+        <section class="card" aria-labelledby="inputs-title">
+          <h2 id="inputs-title">Pool and weights</h2>
+          <div class="amount">
+            <label for="amount">Pool amount in wei</label>
+            <input id="amount" inputmode="numeric" autocomplete="off" spellcheck="false" value="7" aria-describedby="amount-hint">
+            <p class="hint" id="amount-hint">Enter a whole number from 0 to 2²⁵⁶−1.</p>
+            <div class="quick-actions">
+              <button type="button" id="sample-seven">7 wei sample</button>
+              <button type="button" id="sample-max">Maximum u256</button>
+            </div>
+          </div>
+          <div class="payee-heading">
+            <label>Payees and relative weights</label>
+            <div class="payee-list" id="payee-list"></div>
+          </div>
+          <div class="controls">
+            <button type="button" id="add-payee">Add payee</button>
+            <button type="button" class="primary" id="calculate">Calculate shares</button>
+          </div>
+          <div class="status" id="status" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="card" aria-labelledby="results-title" aria-live="polite">
+          <h2 id="results-title">Allocation result</h2>
+          <div class="summary">
+            <div class="metric"><span>Pool</span><strong id="sum-pool">7 wei</strong></div>
+            <div class="metric"><span>Weight total</span><strong id="sum-weight">3</strong></div>
+            <div class="metric"><span>Remainder wei awarded</span><strong id="sum-leftover">1</strong></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Payee</th><th>Weight</th><th>Base share</th><th>Fraction</th><th>Bonus</th><th>Final share</th></tr></thead>
+              <tbody id="result-rows"></tbody>
+            </table>
+          </div>
+          <p class="note" id="result-note">The leftover wei goes to the largest fractional remainders. Equal remainders go to the earlier payee.</p>
+        </section>
+      </div>
+      <footer>No wallet connection, network requests, or transactions. This page is an educational reference view of the Fe library; the Fe contract remains authoritative.</footer>
+    </main>
+
+    <script>
+      "use strict";
+      const MAX_U256 = (1n << 256n) - 1n;
+      const MAX_TOTAL_WEIGHT = 1_000_000_000_000_000_000n;
+      const list = document.getElementById("payee-list");
+      const amountInput = document.getElementById("amount");
+      const status = document.getElementById("status");
+      const resultRows = document.getElementById("result-rows");
+      let nextId = 1;
+
+      function addPayee(label = `Payee ${nextId}`, weight = "1") {
+        if (list.children.length >= 8) return;
+        const row = document.createElement("div");
+        row.className = "payee-row";
+        row.dataset.id = String(nextId++);
+        const nameLabel = document.createElement("label");
+        nameLabel.textContent = "Name";
+        const name = document.createElement("input");
+        name.type = "text";
+        name.maxLength = 40;
+        name.value = label;
+        name.setAttribute("aria-label", "Payee name");
+        const weightLabel = document.createElement("label");
+        weightLabel.textContent = "Weight";
+        const weightInput = document.createElement("input");
+        weightInput.type = "text";
+        weightInput.inputMode = "numeric";
+        weightInput.autocomplete = "off";
+        weightInput.spellcheck = false;
+        weightInput.value = weight;
+        weightInput.setAttribute("aria-label", "Payee weight");
+        const nameWrap = document.createElement("div");
+        const weightWrap = document.createElement("div");
+        nameWrap.append(nameLabel, name);
+        weightWrap.append(weightLabel, weightInput);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "remove";
+        remove.textContent = "Remove";
+        remove.setAttribute("aria-label", `Remove ${label}`);
+        remove.addEventListener("click", () => { row.remove(); updateControls(); calculate(); });
+        row.append(nameWrap, weightWrap, remove);
+        list.append(row);
+        updateControls();
+      }
+
+      function updateControls() {
+        const count = list.children.length;
+        document.getElementById("add-payee").disabled = count >= 8;
+        for (const row of list.children) {
+          const button = row.querySelector("button");
+          button.disabled = count <= 1;
+          button.setAttribute("aria-label", `Remove ${row.querySelector('[aria-label="Payee name"]').value || "payee"}`);
+        }
+      }
+
+      function integer(text, label, min = 0n, max = MAX_U256) {
+        const clean = text.trim();
+        if (!/^(0|[1-9][0-9]*)$/.test(clean)) throw new Error(`${label} must be a whole number without separators.`);
+        const value = BigInt(clean);
+        if (value < min || value > max) throw new Error(`${label} is outside the allowed range.`);
+        return value;
+      }
+
+      function calculate() {
+        status.textContent = "";
+        resultRows.replaceChildren();
+        try {
+          const amount = integer(amountInput.value, "Pool amount");
+          const recipients = [...list.children].map((row, index) => ({
+            name: row.querySelector('[aria-label="Payee name"]').value.trim() || `Payee ${index + 1}`,
+            weight: integer(row.querySelector('[aria-label="Payee weight"]').value, `Weight ${index + 1}`, 1n, MAX_TOTAL_WEIGHT),
+            index,
+          }));
+          if (recipients.length < 1 || recipients.length > 8) throw new Error("Use between 1 and 8 payees.");
+          const totalWeight = recipients.reduce((sum, recipient) => sum + recipient.weight, 0n);
+          if (totalWeight > MAX_TOTAL_WEIGHT) throw new Error("Total weight exceeds 10¹⁸.");
+          const quotient = amount / totalWeight;
+          const remainder = amount % totalWeight;
+          let baseTotal = 0n;
+          const shares = recipients.map(recipient => {
+            const weightedRemainder = remainder * recipient.weight;
+            const base = quotient * recipient.weight + weightedRemainder / totalWeight;
+            const fraction = weightedRemainder % totalWeight;
+            baseTotal += base;
+            return { ...recipient, base, fraction, bonus: false, payout: base };
+          });
+          const leftover = amount - baseTotal;
+          const rank = [...shares].sort((a, b) => a.fraction === b.fraction ? a.index - b.index : (a.fraction > b.fraction ? -1 : 1));
+          for (let i = 0; i < Number(leftover); i++) {
+            rank[i].bonus = true;
+            rank[i].payout += 1n;
+          }
+
+          for (const share of shares) {
+            const tr = document.createElement("tr");
+            const cells = [share.name, share.weight.toString(), share.base.toString(), `${share.fraction}/${totalWeight}`, share.bonus ? "+1 wei" : "—", share.payout.toString()];
+            for (let i = 0; i < cells.length; i++) {
+              const td = document.createElement("td");
+              td.textContent = cells[i];
+              if (i === 4 && share.bonus) td.className = "winner";
+              tr.append(td);
+            }
+            resultRows.append(tr);
+          }
+          const sum = shares.reduce((total, share) => total + share.payout, 0n);
+          document.getElementById("sum-pool").textContent = `${amount} wei`;
+          document.getElementById("sum-weight").textContent = totalWeight.toString();
+          document.getElementById("sum-leftover").textContent = leftover.toString();
+          document.getElementById("result-note").textContent = sum === amount
+            ? `All ${sum} wei are allocated. Largest remainders win; ties go to the earlier payee.`
+            : "Allocation error: final shares do not equal the pool.";
+        } catch (error) {
+          status.textContent = error instanceof Error ? error.message : "Could not calculate shares.";
+          document.getElementById("sum-pool").textContent = "—";
+          document.getElementById("sum-weight").textContent = "—";
+          document.getElementById("sum-leftover").textContent = "—";
+        }
+      }
+
+      document.getElementById("add-payee").addEventListener("click", () => { addPayee(); calculate(); });
+      document.getElementById("calculate").addEventListener("click", calculate);
+      document.getElementById("sample-seven").addEventListener("click", () => {
+        amountInput.value = "7";
+        list.replaceChildren();
+        nextId = 1;
+        addPayee("Payee A", "1"); addPayee("Payee B", "1"); addPayee("Payee C", "1"); calculate();
+      });
+      document.getElementById("sample-max").addEventListener("click", () => {
+        amountInput.value = MAX_U256.toString();
+        calculate();
+      });
+      amountInput.addEventListener("input", calculate);
+      list.addEventListener("input", calculate);
+      addPayee("Payee A", "1"); addPayee("Payee B", "1"); addPayee("Payee C", "1"); calculate();
+    </script>
+  </body>
+</html>
