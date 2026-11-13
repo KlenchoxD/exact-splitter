@@ -124,6 +124,20 @@ test("explorer renders the default split and Alabama-paradox preset", () => {
   );
 });
 
+test("explorer adds and calculates twelve payees", () => {
+  const elements = openExplorer();
+  const addButton = elements["add-payee"];
+  while (elements["payee-list"].children.length < 12) {
+    addButton.listeners.click();
+  }
+
+  assert.equal(elements["payee-list"].children.length, 12);
+  assert.equal(addButton.disabled, true);
+  assert.equal(elements.status.textContent, "");
+  assert.equal(elements["result-rows"].children.length, 12);
+  assert.equal(elements["sum-pool"].textContent, "7 wei");
+});
+
 test("explorer clears the previous note when input becomes invalid", () => {
   const elements = openExplorer();
   elements["result-note"].textContent = "previous successful allocation";

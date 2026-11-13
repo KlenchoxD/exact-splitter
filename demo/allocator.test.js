@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
-const { allocate } = require("./allocator.js");
+const { allocate, MAX_PAYEES } = require("./allocator.js");
 
 const vectors = JSON.parse(
   fs.readFileSync(path.join(__dirname, "allocator-vectors.json"), "utf8"),
@@ -25,8 +25,19 @@ for (const vector of vectors.cases) {
   });
 }
 
-test("rejects more than eight payees", () => {
-  assert.throws(() => allocate(1n, Array(9).fill(1n)), RangeError);
+test("supports the twelve-payee limit exercised by the Fe allocator", () => {
+  assert.equal(MAX_PAYEES, 12);
+  const { shares, leftover } = allocate(29n, Array(MAX_PAYEES).fill(1n));
+  assert.deepEqual(
+    shares.map((share) => share.payout.toString()),
+    ["3", "3", "3", "3", "3", "2", "2", "2", "2", "2", "2", "2"],
+  );
+  assert.equal(leftover, 5n);
+  assert.equal(shares.reduce((sum, share) => sum + share.payout, 0n), 29n);
+});
+
+test("rejects more than twelve payees", () => {
+  assert.throws(() => allocate(1n, Array(13).fill(1n)), RangeError);
 });
 
 test("rejects a zero weight", () => {

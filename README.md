@@ -96,7 +96,7 @@ It verifies that splitting 7 units across weights `[1, 1, 1]` produces `[3, 2, 2
 
 ## Interactive demo
 
-Open [`demo/index.html`](demo/index.html) in a modern browser to explore exact payouts for 1–8 weighted payees (a demo UI limit; the Fe allocator has no fixed party cap). The page accepts integer amounts in wei up to `2^256 - 1`, shows each base share and fractional remainder, and marks the one-wei awards and tie order. The `3 → 4 wei paradox` preset reproduces the Alabama-paradox test case: with weights `1:3:3`, Payee A falls from 1 wei to 0 when the pool grows from 3 to 4 wei. It uses JavaScript `BigInt`, makes no network requests, and never connects a wallet. It is an educational reference view; the Fe implementation remains authoritative.
+Open [`demo/index.html`](demo/index.html) in a modern browser to explore exact payouts for 1–12 weighted payees. This matches the largest party count exercised in the Fe test suite; the generic Fe allocator has no fixed party cap. The page accepts integer amounts in wei up to `2^256 - 1`, shows each base share and fractional remainder, and marks the one-wei awards and tie order. The `3 → 4 wei paradox` preset reproduces the Alabama-paradox test case: with weights `1:3:3`, Payee A falls from 1 wei to 0 when the pool grows from 3 to 4 wei. It uses JavaScript `BigInt`, makes no network requests, and never connects a wallet. It is an educational reference view; the Fe implementation remains authoritative.
 
 ## Contract demo
 
@@ -108,7 +108,7 @@ fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 
 ## Shared allocation vectors
 
-The offline browser explorer and Node use the same allocation module. A JSON fixture holds exact payouts for tie ordering, one and eight payees, maximum total weight, the Alabama paradox, and maximum-u256 arithmetic. A generator turns those same vectors into Fe tests that pass each case's weights at their natural array length, so the browser calculation and the Fe implementation check against identical expected outputs. Locally, run `node scripts/generate-vectors.mjs --check` and `node --test demo/allocator.test.js demo/page.test.js` before the Fe commands. CI runs these checks plus Fe formatting, tests, and build. Fe remains the authoritative implementation; the browser is an educational view.
+The offline browser explorer and Node use the same allocation module. A JSON fixture holds exact payouts for tie ordering, one and eight payees, maximum total weight, the Alabama paradox, and maximum-u256 arithmetic. A generator turns those same vectors into Fe tests that pass each case's weights at their natural array length, so the browser calculation and the Fe implementation check against identical expected outputs. The browser and Node tests also exercise twelve payees, matching the largest array used by the Fe suite. Locally, run `node scripts/generate-vectors.mjs --check` and `node --test demo/allocator.test.js demo/page.test.js` before the Fe commands. CI runs these checks plus Fe formatting, tests, and build. Fe remains the authoritative implementation; the browser is an educational view.
 
 ## Declaration
 

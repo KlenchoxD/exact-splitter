@@ -7,13 +7,14 @@
 
   const MAX_U256 = (1n << 256n) - 1n;
   const MAX_TOTAL_WEIGHT = 1_000_000_000_000_000_000n;
+  const MAX_PAYEES = 12;
 
   function allocate(amount, weights) {
     if (typeof amount !== "bigint" || amount < 0n || amount > MAX_U256) {
       throw new RangeError("Amount must be an unsigned u256.");
     }
-    if (!Array.isArray(weights) || weights.length < 1 || weights.length > 8) {
-      throw new RangeError("Use between 1 and 8 weights.");
+    if (!Array.isArray(weights) || weights.length < 1 || weights.length > MAX_PAYEES) {
+      throw new RangeError(`Use between 1 and ${MAX_PAYEES} weights.`);
     }
 
     let totalWeight = 0n;
@@ -53,5 +54,5 @@
     return { shares, leftover };
   }
 
-  return { MAX_U256, MAX_TOTAL_WEIGHT, allocate };
+  return { MAX_U256, MAX_TOTAL_WEIGHT, MAX_PAYEES, allocate };
 });

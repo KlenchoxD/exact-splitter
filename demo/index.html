@@ -128,7 +128,7 @@
     <script src="./allocator.js"></script>
     <script>
       "use strict";
-      const { MAX_U256, MAX_TOTAL_WEIGHT, allocate } = window.ExactSplitterAllocator;
+      const { MAX_U256, MAX_TOTAL_WEIGHT, MAX_PAYEES, allocate } = window.ExactSplitterAllocator;
       const list = document.getElementById("payee-list");
       const amountInput = document.getElementById("amount");
       const status = document.getElementById("status");
@@ -136,7 +136,7 @@
       let nextId = 1;
 
       function addPayee(label = `Payee ${nextId}`, weight = "1") {
-        if (list.children.length >= 8) return;
+        if (list.children.length >= MAX_PAYEES) return;
         const row = document.createElement("div");
         row.className = "payee-row";
         row.dataset.id = String(nextId++);
@@ -173,7 +173,7 @@
 
       function updateControls() {
         const count = list.children.length;
-        document.getElementById("add-payee").disabled = count >= 8;
+        document.getElementById("add-payee").disabled = count >= MAX_PAYEES;
         for (const row of list.children) {
           const button = row.querySelector("button");
           button.disabled = count <= 1;
@@ -199,7 +199,7 @@
             weight: integer(row.querySelector('[aria-label="Payee weight"]').value, `Weight ${index + 1}`, 1n, MAX_TOTAL_WEIGHT),
             index,
           }));
-          if (recipients.length < 1 || recipients.length > 8) throw new Error("Use between 1 and 8 payees.");
+          if (recipients.length < 1 || recipients.length > MAX_PAYEES) throw new Error(`Use between 1 and ${MAX_PAYEES} payees.`);
           const totalWeight = recipients.reduce((sum, recipient) => sum + recipient.weight, 0n);
           const allocation = allocate(amount, recipients.map((recipient) => recipient.weight));
           const shares = allocation.shares
