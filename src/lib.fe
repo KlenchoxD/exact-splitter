@@ -135,6 +135,59 @@ pub contract ClaimForwarder uses (ctx: Ctx, call: mut Call) {
     }
 }
 
+/// Test recipient whose claim path works but whose plain ETH receive path reverts.
+pub contract RejectingReceiver uses (call: mut Call) {
+    recv PayeeMsg {
+        ClaimFrom { splitter } -> Wei uses (call) {
+            splitter.call(SplitterMsg::Claim {})
+        }
+
+        FinalizeFrom { splitter } -> Wei uses (call) {
+            splitter.call(SplitterMsg::Finalize {})
+        }
+    }
+
+    recv {
+        #[payable]
+        _ {
+            assert!(false, "Receiver rejects ETH")
+        }
+    }
+}
+
+msg ReentrantMsg {
+    #[selector = sol("claimFrom(address)")]
+    ClaimFrom { splitter: Address } -> Wei,
+}
+
+/// Test recipient that tries to claim again during the ETH receive callback.
+pub contract ReentrantReceiver uses (ctx: Ctx, call: mut Call) {
+    mut received: Wei,
+
+    init() uses (mut received) { received = Wei::zero() }
+
+    recv ReentrantMsg {
+        ClaimFrom { splitter } -> Wei uses (call) {
+            splitter.call(SplitterMsg::Claim {})
+        }
+    }
+
+    recv {
+        #[payable]
+        _ uses (ctx, call, mut received) {
+            let reentrant = call
+                .try_call(
+                    addr: ctx.caller(),
+                    gas: ctx.gas(),
+                    value: Wei::zero(),
+                    message: SplitterMsg::Claim {},
+                )
+            assert!(!reentrant.success(), "Reentrant claim succeeded")
+            received += ctx.value()
+        }
+    }
+}
+
 #[event]
 struct Deposited {
     #[indexed]

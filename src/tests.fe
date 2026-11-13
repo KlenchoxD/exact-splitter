@@ -2,6 +2,9 @@ use ingot::{
     ClaimForwarder,
     ExactSplitter,
     PayeeMsg,
+    RejectingReceiver,
+    ReentrantMsg,
+    ReentrantReceiver,
     SplitterMsg,
     largest_remainder_shares,
     largest_remainder_shares_bounded,
@@ -368,6 +371,97 @@ fn claim_cannot_be_replayed() uses (evm: mut Evm) {
             message: PayeeMsg::ClaimFrom { splitter },
         )
     assert!(!replay.success())
+}
+
+#[test(balance = 10_000_000_000_000_000_000)]
+fn failed_receiver_transfer_preserves_claimable_amount() uses (evm: mut Evm) {
+    let creator = evm.address()
+    let rejecting: Address = evm.create2<RejectingReceiver>(value: wei(0), args: (), salt: 1)
+    let payee_c = Address::new(0xC0C)
+    let splitter = evm
+        .create2<ExactSplitter>(
+            value: wei(0),
+            args: (creator, 1, rejecting, 1, payee_c, 1),
+            salt: 0,
+        )
+    let _: Wei = evm
+        .call(
+            addr: splitter,
+            gas: 200_000,
+            value: wei(3),
+            message: SplitterMsg::Deposit {},
+        )
+    let _: Wei = evm
+        .call(
+            addr: splitter,
+            gas: 300_000,
+            value: wei(0),
+            message: SplitterMsg::Finalize {},
+        )
+
+    let failed = evm
+        .try_call(
+            addr: rejecting,
+            gas: 300_000,
+            value: wei(0),
+            message: PayeeMsg::ClaimFrom { splitter },
+        )
+    assert!(!failed.success())
+
+    let still_due: Wei = evm
+        .call(
+            addr: splitter,
+            gas: 100_000,
+            value: wei(0),
+            message: SplitterMsg::Claimable { account: rejecting },
+        )
+    assert!(still_due == wei(1))
+}
+
+#[test(balance = 10_000_000_000_000_000_000)]
+fn reentrant_receiver_cannot_claim_twice() uses (evm: mut Evm) {
+    let creator = evm.address()
+    let reentrant: Address = evm.create2<ReentrantReceiver>(value: wei(0), args: (), salt: 1)
+    let payee_c = Address::new(0xC0C)
+    let splitter = evm
+        .create2<ExactSplitter>(
+            value: wei(0),
+            args: (creator, 1, reentrant, 1, payee_c, 1),
+            salt: 0,
+        )
+    let _: Wei = evm
+        .call(
+            addr: splitter,
+            gas: 200_000,
+            value: wei(3),
+            message: SplitterMsg::Deposit {},
+        )
+    let _: Wei = evm
+        .call(
+            addr: splitter,
+            gas: 300_000,
+            value: wei(0),
+            message: SplitterMsg::Finalize {},
+        )
+
+    let paid: Wei = evm
+        .call(
+            addr: reentrant,
+            gas: 500_000,
+            value: wei(0),
+            message: ReentrantMsg::ClaimFrom { splitter },
+        )
+    assert!(paid == wei(1))
+    assert!(evm.balance(reentrant) == wei(1))
+
+    let no_longer_due: Wei = evm
+        .call(
+            addr: splitter,
+            gas: 100_000,
+            value: wei(0),
+            message: SplitterMsg::Claimable { account: reentrant },
+        )
+    assert!(no_longer_due == wei(0))
 }
 
 #[test(should_revert, balance = 10_000_000_000_000_000_000)]

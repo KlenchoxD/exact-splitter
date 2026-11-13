@@ -47,8 +47,8 @@ claimable.set(key: payee_b, value: wei(amount_b))
 
 ## Architecture
 
-- `src/lib.fe` contains `largest_remainder_shares_bounded` (1–8 parties), the three-payee wrapper, the `ExactSplitter` contract, and a small payable `ClaimForwarder` used to exercise contract recipients.
-- `src/tests.fe` covers bounded counts, exact ratios, fractional-remainder ordering, ties, one-wei pools, maximum-`u256` payouts, the Alabama paradox, invalid weights, finalization, and contract payees.
+- `src/lib.fe` contains `largest_remainder_shares_bounded` (1–8 parties), the three-payee wrapper, the `ExactSplitter` contract, and small receiver contracts that exercise normal, rejecting, and reentrant claim paths.
+- `src/tests.fe` covers bounded counts, exact ratios, fractional-remainder ordering, ties, one-wei pools, maximum-`u256` payouts, the Alabama paradox, invalid weights, finalization, and failed/reentrant transfers.
 - `fe.toml` identifies the Fe ingot as `exact_splitter`.
 - `.github/workflows/ci.yml` runs formatting, tests, and compilation with Fe 26.5.0.
 
@@ -63,7 +63,7 @@ fe test
 fe build
 ```
 
-The tested version for this prototype is `fe 26.5.0 (3dab95f)`. This working revision has 18 tests. A short reproducible example is:
+The tested version for this prototype is `fe 26.5.0 (3dab95f)`. This working revision has 20 tests. A short reproducible example is:
 
 ```sh
 fe test --filter equal_split_gives_remainder_to_first_payee_on_tie
@@ -78,7 +78,7 @@ It verifies that splitting 7 units across weights 1:1:1 produces 3, 2, and 2, an
 - The allocation order is fixed at deployment; payee A wins ties when fractional remainders are equal.
 - Largest remainder can exhibit the Alabama paradox: with weights `1:3:3`, a pool of 3 units allocates `1/1/1`, while 4 units allocates `0/2/2`. This one-shot contract calculates shares only when the creator finalizes, so previously recorded claims do not change; the final amount can affect shares before finalization.
 - The contract accounts for deposits made through `deposit()`. ETH forced into the contract outside that function is not included in `total_funded` and cannot be claimed by this prototype.
-- A payee contract that rejects plain ETH transfers cannot claim until it can accept the transfer. A failed attempt leaves its entitlement unchanged.
+- A payee contract that rejects plain ETH transfers cannot claim until it can accept the transfer. A failed attempt reverts and leaves its entitlement unchanged; a callback that tries to reenter cannot claim the same entitlement twice.
 - A contract payee must be able to call `claim()` itself; a contract that cannot originate that call cannot withdraw.
 - This is an unreviewed contest prototype, not production-ready software. Fe itself is not yet recommended for production use.
 
@@ -92,7 +92,7 @@ fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 
 ## Verification record
 
-Commit `ec4326d` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43341773414) with Fe 26.5.0, formatting, 18 tests, and the compiler build. The code in this revision also passed local `fe fmt --check`, all 18 tests, and `fe build` with Fe 26.5.0. The revision is on public branch `codex/fe-bounded-allocation`; it has not been submitted to Fe Builders.
+Commit `ec4326d` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43341773414) with Fe 26.5.0, formatting, 18 tests, and the compiler build. This revision adds rejecting and reentrant receiver coverage and passed local `fe fmt --check`, all 20 tests, and `fe build` with Fe 26.5.0. It has not been submitted to Fe Builders.
 
 ## Declaration
 
