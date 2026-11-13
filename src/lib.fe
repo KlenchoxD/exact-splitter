@@ -230,8 +230,20 @@ pub contract ExactSplitter uses (ctx: Ctx, call: mut Call, log: mut Log) {
         assert!(weight_a_value > 0, "Weight is zero")
         assert!(weight_b_value > 0, "Weight is zero")
         assert!(weight_c_value > 0, "Weight is zero")
-        let weights = weight_a_value + weight_b_value + weight_c_value
-        assert!(weights <= MAX_TOTAL_WEIGHT, "Weight total too large")
+        assert!(
+            weight_a_value <= MAX_TOTAL_WEIGHT,
+            "Weight total too large",
+        )
+        assert!(
+            weight_b_value <= MAX_TOTAL_WEIGHT - weight_a_value,
+            "Weight total too large",
+        )
+        let weight_ab = weight_a_value + weight_b_value
+        assert!(
+            weight_c_value <= MAX_TOTAL_WEIGHT - weight_ab,
+            "Weight total too large",
+        )
+        let weights = weight_ab + weight_c_value
 
         creator = ctx.caller()
         payee_a = payee_a_value

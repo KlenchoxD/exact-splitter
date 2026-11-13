@@ -49,7 +49,7 @@ claimable.set(key: payee_b, value: payout_b)
 ## Architecture
 
 - `src/lib.fe` contains the const-generic `largest_remainder_shares`, the `ExactSplitter` contract, and small receiver contracts that exercise normal, rejecting, and reentrant claim paths.
-- `src/tests.fe` covers one-, eight-, and twelve-party arrays, the empty-array revert, exact ratios, fractional-remainder ordering, ties, one-wei pools, maximum-`u256` payouts, the Alabama paradox, invalid weights, finalization, and failed/reentrant transfers.
+- `src/tests.fe` covers one-, eight-, and twelve-party arrays, the empty-array revert, exact ratios, fractional-remainder ordering, ties, one-wei pools, maximum-`u256` payouts, the Alabama paradox, invalid weights, overflow-safe contract construction, unequal-weight payout mapping, finalization, and failed/reentrant transfers.
 - `fe.toml` identifies the Fe ingot as `exact_splitter`.
 - `src/generated_vectors.fe` is generated from the shared payout fixture and adds cross-language Fe assertions.
 - `scripts/generate-vectors.mjs` validates the fixture and keeps the generated Fe tests synchronized.
@@ -74,7 +74,7 @@ fe test
 fe build
 ```
 
-The tested version for this prototype is `fe 26.5.0 (3dab95f)`. This working revision has 27 tests. A short reproducible example is:
+The tested version for this prototype is `fe 26.5.0 (3dab95f)`. The Fe suite covers the allocator, contract lifecycle, constructor bounds, and adversarial claim receivers. A short reproducible example is:
 
 ```sh
 fe test --filter equal_split_gives_remainder_to_first_payee_on_tie
@@ -96,11 +96,11 @@ It verifies that splitting 7 units across weights `[1, 1, 1]` produces `[3, 2, 2
 
 ## Interactive demo
 
-Open [`demo/index.html`](demo/index.html) in a modern browser to explore exact payouts for 1–12 weighted payees. This matches the largest party count exercised in the Fe test suite; the generic Fe allocator has no fixed party cap. The page accepts integer amounts in wei up to `2^256 - 1`, shows each base share and fractional remainder, and marks the one-wei awards and tie order. The `3 → 4 wei paradox` preset reproduces the Alabama-paradox test case: with weights `1:3:3`, Payee A falls from 1 wei to 0 when the pool grows from 3 to 4 wei. It uses JavaScript `BigInt`, makes no network requests, and never connects a wallet. It is an educational reference view; the Fe implementation remains authoritative.
+Open [`demo/index.html`](demo/index.html) in a modern browser to explore exact payouts for 1–12 weighted payees. This matches the largest party count exercised in the Fe test suite; the generic Fe allocator has no fixed party cap. The page accepts integer amounts in wei up to `2^256 - 1`, shows each base share and fractional remainder, marks the one-wei awards, and explains the tie rule. The `3 → 4 wei paradox` preset reproduces the Alabama-paradox test case: with weights `1:3:3`, Payee A falls from 1 wei to 0 when the pool grows from 3 to 4 wei. It uses JavaScript `BigInt`, makes no network requests, and never connects a wallet. It is an educational reference view; the Fe implementation remains authoritative.
 
 ## Contract demo
 
-The tests deploy the contract in Fe's local EVM, deposit 7 wei, finalize, check claimable shares of 3/2/2, and have a contract payee claim successfully. Run:
+The tests deploy the contract in Fe's local EVM, deposit 7 wei, finalize, check claimable shares of 3/2/2, and have a contract payee claim successfully. A separate 10-wei scenario checks that constructor weights 1:2:4 map to payables of 1/3/6, and a regression test rejects a `u256`-overflowing constructor weight sum. Run:
 
 ```sh
 fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
