@@ -32,6 +32,39 @@ fn largest_fractional_remainder_gets_the_leftover_wei() {
 }
 
 #[test]
+fn two_leftover_wei_follow_fraction_ranking_and_ties() {
+    let (first_tie, second_tie, third_tie) = largest_remainder_shares(
+        amount: 2,
+        weight_a: 1,
+        weight_b: 1,
+        weight_c: 1,
+    )
+    assert!(first_tie == 1)
+    assert!(second_tie == 1)
+    assert!(third_tie == 0)
+
+    let (first_b, second_b, third_b) = largest_remainder_shares(
+        amount: 8,
+        weight_a: 1,
+        weight_b: 3,
+        weight_c: 1,
+    )
+    assert!(first_b == 2)
+    assert!(second_b == 5)
+    assert!(third_b == 1)
+
+    let (first_c, second_c, third_c) = largest_remainder_shares(
+        amount: 8,
+        weight_a: 1,
+        weight_b: 1,
+        weight_c: 3,
+    )
+    assert!(first_c == 2)
+    assert!(second_c == 1)
+    assert!(third_c == 5)
+}
+
+#[test]
 fn weighted_split_matches_exact_ratios() {
     let (first, second, third) = largest_remainder_shares(
         amount: 100,

@@ -63,7 +63,7 @@ fe test
 fe build
 ```
 
-The tested version for this prototype is `fe 26.5.0 (3dab95f)`. The current test suite has 12 passing tests. A short reproducible example is:
+The tested version for this prototype is `fe 26.5.0 (3dab95f)`. The current test suite has 13 passing tests. A short reproducible example is:
 
 ```sh
 fe test --filter equal_split_gives_remainder_to_first_payee_on_tie
