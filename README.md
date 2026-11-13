@@ -106,7 +106,7 @@ The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://gith
 
 ## Submission status
 
-Project `FE-051` is registered for the Fe Builders Challenge. The form currently shows the `5cc1be9` submission as received and pending validation. This working revision has not been submitted; receipt does not confirm acceptance. Technical eligibility is reviewed separately. The responsible human contact details are held privately by the organizers.
+Project `FE-051` is registered for the Fe Builders Challenge. The latest form submission is commit `152c874`; the form shows it as received and pending validation, which does not confirm acceptance. The later documentation-only commits are not separate contest submissions; the submitted code remains available at `152c874`. Technical eligibility is reviewed separately. The responsible human contact details are held privately by the organizers.
 
 ## License
 
