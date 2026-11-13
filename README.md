@@ -34,6 +34,8 @@ The pool is intentionally one-shot: finalization permanently closes deposits, an
 
 Fe's typed `Wei` values keep ETH amounts separate from ordinary integers. The contract converts to `u256` only at the pure allocation boundary, then converts the payout back to `Wei`. Fe's explicit `uses` clauses also make storage writes, caller context, logging, and external calls visible at each handler.
 
+The reusable Fe function `largest_remainder_shares_bounded` accepts a fixed eight-weight array and an active count from one to eight. The three-payee contract uses a small typed wrapper over that bounded allocator.
+
 ```fe
 let amount = total_funded.as_wei()
 let (amount_a, amount_b, amount_c) = largest_remainder_shares(
