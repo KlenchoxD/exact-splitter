@@ -5,24 +5,19 @@ use std::evm::wei
 /// The weight total is capped so every remainder-times-weight intermediate
 /// stays below 10^36, even when `amount` is the largest u256 value.
 pub const MAX_TOTAL_WEIGHT: u256 = 1_000_000_000_000_000_000
-pub const MAX_ALLOCATION_PARTIES: usize = 8
 
-/// Splits an amount among 1 to 8 parties using largest remainders.
+/// Splits an amount among `N` weighted parties using largest remainders.
 ///
-/// Only the first `count` weights are read. Unused payout slots are zero.
-/// Equal fractional remainders are awarded in ascending index order.
-pub fn largest_remainder_shares_bounded(
-    amount: u256,
-    weights: [u256; 8],
-    count: usize,
-) -> [u256; 8] {
-    assert!(
-        count > 0 && count <= MAX_ALLOCATION_PARTIES,
-        "Invalid party count",
-    )
+/// Quotient/remainder decomposition avoids multiplying the full amount by a
+/// weight. Each leftover wei goes to the largest fractional remainder; equal
+/// remainders are awarded in ascending index order. The payouts sum exactly
+/// to `amount`. `N` must be at least one, every weight must be positive, and
+/// the weight total must not exceed `MAX_TOTAL_WEIGHT`.
+pub fn largest_remainder_shares<const N: usize>(amount: u256, weights: [u256; N]) -> [u256; N] {
+    assert!(N > 0, "No parties")
 
     var total_weight: u256 = 0
-    for index in 0 .. count {
+    for index in 0 .. N {
         let weight = weights[index]
         assert!(weight > 0, "Weight is zero")
         assert!(
@@ -34,12 +29,12 @@ pub fn largest_remainder_shares_bounded(
 
     let quotient = amount / total_weight
     let remainder = amount % total_weight
-    var payouts: [u256; 8] = [0; 8]
-    var fractions: [u256; 8] = [0; 8]
-    var selected: [bool; 8] = [false; 8]
+    var payouts: [u256; N] = [0; N]
+    var fractions: [u256; N] = [0; N]
+    var selected: [bool; N] = [false; N]
     var base_total: u256 = 0
 
-    for index in 0 .. count {
+    for index in 0 .. N {
         let weight = weights[index]
         let base = quotient * weight + (remainder * weight) / total_weight
         payouts[index] = base
@@ -49,12 +44,13 @@ pub fn largest_remainder_shares_bounded(
 
     let leftover = amount - base_total
     var awarded: u256 = 0
-    for _ in 0 .. count {
+    // Selection costs O(N * leftover), and leftover < N; sort for large N.
+    for _ in 0 .. N {
         if awarded < leftover {
             var found = false
             var best_index: usize = 0
             var best_fraction: u256 = 0
-            for index in 0 .. count {
+            for index in 0 .. N {
                 if !selected[index] && (!found || fractions[index] > best_fraction) {
                     found = true
                     best_index = index
@@ -69,25 +65,6 @@ pub fn largest_remainder_shares_bounded(
     }
 
     payouts
-}
-
-/// Splits an amount by weight using the largest-remainder method.
-///
-/// Quotient/remainder decomposition avoids multiplying the full amount by a
-/// weight. Each leftover wei goes to the largest fractional remainder; ties
-/// are resolved by argument order (A, then B, then C). The results sum exactly
-/// to `amount`.
-pub fn largest_remainder_shares(amount: u256, weight_a: u256, weight_b: u256, weight_c: u256) -> (
-    u256,
-    u256,
-    u256,
-) {
-    let payouts = largest_remainder_shares_bounded(
-        amount: amount,
-        weights: [weight_a, weight_b, weight_c, 0, 0, 0, 0, 0],
-        count: 3,
-    )
-    (payouts[0], payouts[1], payouts[2])
 }
 
 msg SplitterMsg {
@@ -299,15 +276,13 @@ pub contract ExactSplitter uses (ctx: Ctx, call: mut Call, log: mut Log) {
             assert!(total_funded > Wei::zero(), "Pool is empty")
 
             let amount = total_funded.as_wei()
-            let (amount_a, amount_b, amount_c) = largest_remainder_shares(
+            let payouts = largest_remainder_shares(
                 amount: amount,
-                weight_a: weight_a,
-                weight_b: weight_b,
-                weight_c: total_weight - weight_a - weight_b,
+                weights: [weight_a, weight_b, total_weight - weight_a - weight_b],
             )
-            let payout_a = wei(amount_a)
-            let payout_b = wei(amount_b)
-            let payout_c = wei(amount_c)
+            let payout_a = wei(payouts[0])
+            let payout_b = wei(payouts[1])
+            let payout_c = wei(payouts[2])
 
             claimable.set(key: payee_a, value: payout_a)
             claimable.set(key: payee_b, value: payout_b)

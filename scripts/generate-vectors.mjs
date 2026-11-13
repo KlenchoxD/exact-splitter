@@ -26,7 +26,7 @@ function testName(name) {
 
 const lines = [
   "// Generated from demo/allocator-vectors.json. Do not edit manually.",
-  "use ingot::largest_remainder_shares_bounded",
+  "use ingot::largest_remainder_shares",
   "",
 ];
 
@@ -44,8 +44,8 @@ for (const vector of vectors.cases) {
   }
   usedTestNames.add(generatedName);
 
-  if (!Array.isArray(vector.weights) || vector.weights.length < 1 || vector.weights.length > 8) {
-    throw new Error("Vector weight count must be between 1 and 8: " + vector.name);
+  if (!Array.isArray(vector.weights) || vector.weights.length < 1) {
+    throw new Error("Vector must have at least one weight: " + vector.name);
   }
   if (!Array.isArray(vector.expected) || vector.expected.length !== vector.weights.length) {
     throw new Error("Expected payout count must match weights: " + vector.name);
@@ -67,27 +67,30 @@ for (const vector of vectors.cases) {
   if (activeExpected.some((value) => value > MAX_U256) || expectedTotal !== amount) {
     throw new Error("Expected payouts must be u256 values that sum to the amount in " + vector.name);
   }
-  const weights = activeWeights.concat(Array(8 - activeWeights.length).fill(0n));
-  const expected = activeExpected.concat(Array(8 - activeExpected.length).fill(0n));
   lines.push("#[test]");
   lines.push("fn " + generatedName + "() {");
-  lines.push("    let payouts = largest_remainder_shares_bounded(");
-  lines.push("        amount: " + toFeInteger(amount) + ",");
-  const weightValues = weights.map(toFeInteger);
+  const weightValues = activeWeights.map(toFeInteger);
+  const inlineCall = "    let payouts = largest_remainder_shares(amount: " + toFeInteger(amount)
+    + ", weights: [" + weightValues.join(", ") + "])";
   const inlineWeights = "        weights: [" + weightValues.join(", ") + "],";
-  if (inlineWeights.length > 100) {
-    lines.push("        weights: [");
-    for (const weight of weightValues) {
-      lines.push("            " + weight + ",");
-    }
-    lines.push("        ],");
+  if (inlineCall.length <= 100) {
+    lines.push(inlineCall);
   } else {
-    lines.push(inlineWeights);
+    lines.push("    let payouts = largest_remainder_shares(");
+    lines.push("        amount: " + toFeInteger(amount) + ",");
+    if (inlineWeights.length > 100) {
+      lines.push("        weights: [");
+      for (const weight of weightValues) {
+        lines.push("            " + weight + ",");
+      }
+      lines.push("        ],");
+    } else {
+      lines.push(inlineWeights);
+    }
+    lines.push("    )");
   }
-  lines.push("        count: " + activeWeights.length + ",");
-  lines.push("    )");
-  for (let index = 0; index < 8; index += 1) {
-    const value = toFeInteger(expected[index]);
+  for (const [index, payout] of activeExpected.entries()) {
+    const value = toFeInteger(payout);
     const inlineAssertion = "    assert!(payouts[" + index + "] == " + value + ")";
     if (inlineAssertion.length > 100) {
       lines.push("    assert!(");

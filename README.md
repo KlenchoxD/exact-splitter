@@ -1,6 +1,6 @@
 # ExactSplitter
 
-**Pitch:** ExactSplitter splits pooled ETH among three fixed payees by weight, awards rounding wei to the largest fractional shares, and supports amounts near the full `u256` range. Its Fe library exposes the same allocation method for bounded groups of up to eight parties.
+**Pitch:** ExactSplitter splits pooled ETH among three fixed payees by weight, awards rounding wei to the largest fractional shares, and supports amounts near the full `u256` range. Its Fe library exposes the same allocation method for any fixed number of parties through a const-generic array API.
 
 ## The problem
 
@@ -8,7 +8,7 @@ Integer token amounts cannot represent fractional wei. A common allocation formu
 
 ## Approach
 
-`ExactSplitter` is a one-shot ETH pool for three fixed payees. The creator fixes unique payee addresses and positive weights at deployment. Contributors deposit ETH. The creator then finalizes the pool, which closes deposits and records each payee's claimable amount. Each payee withdraws their own amount separately. The pure Fe allocator also accepts a fixed array of up to eight weights plus an active count; the contract currently uses its three-payee wrapper.
+`ExactSplitter` is a one-shot ETH pool for three fixed payees. The creator fixes unique payee addresses and positive weights at deployment. Contributors deposit ETH. The creator then finalizes the pool, which closes deposits and records each payee's claimable amount. Each payee withdraws their own amount separately. The pure Fe allocator, `largest_remainder_shares<const N: usize>(amount: u256, weights: [u256; N]) -> [u256; N]`, accepts any fixed-length weight array and returns a payout array of the same length; the contract calls it with three weights.
 
 For total amount `A`, total weight `D`, and each payee weight `w[i]`, the library first computes:
 
@@ -20,7 +20,7 @@ fraction[i] = (r * w[i]) % D
 leftover = A - sum(base)
 ```
 
-It adds one wei to each of the `leftover` payees with the largest fractional remainder. Ties go to the earliest active array index, so the three-payee contract gives ties to A, then B, then C. The full amount is never multiplied by a weight: `q * w[i] <= A`, and the weight cap keeps `r * w[i] < 10^36`, safely within `u256`. The active payouts always add up to the input amount, including one-wei pools and amounts near the `u256` limit. Unused output slots are zero.
+It adds one wei to each of the `leftover` payees with the largest fractional remainder. Ties go to the earliest array index, so the three-payee contract gives ties to A, then B, then C. The full amount is never multiplied by a weight: `q * w[i] <= A`, and the weight cap keeps `r * w[i] < 10^36`, safely within `u256`. The payouts always add up to the input amount, including one-wei pools and amounts near the `u256` limit. An empty array (`N = 0`) reverts instead of leaving the amount unallocated.
 
 The contract uses pull payments. It clears a payee's entitlement before the external value transfer, so a failed transfer reverts atomically and a reentrant claim sees no remaining entitlement.
 
@@ -34,23 +34,21 @@ The pool is intentionally one-shot: finalization permanently closes deposits, an
 
 Fe's typed `Wei` values keep ETH amounts separate from ordinary integers. The contract converts to `u256` only at the pure allocation boundary, then converts the payout back to `Wei`. Fe's explicit `uses` clauses also make storage writes, caller context, logging, and external calls visible at each handler.
 
-The reusable Fe function `largest_remainder_shares_bounded` accepts a fixed eight-weight array and an active count from one to eight. The three-payee contract uses a small typed wrapper over that bounded allocator.
+The reusable Fe function `largest_remainder_shares` uses a const generic, so the party count is part of the array type. Callers pass `[u256; N]` and receive `[u256; N]`: no padding, no runtime count, and no party cap other than the weight-total bound and gas. The contract passes its three stored weights directly.
 
 ```fe
 let amount = total_funded.as_wei()
-let (amount_a, amount_b, amount_c) = largest_remainder_shares(
+let payouts = largest_remainder_shares(
     amount: amount,
-    weight_a: weight_a,
-    weight_b: weight_b,
-    weight_c: weight_c,
+    weights: [weight_a, weight_b, total_weight - weight_a - weight_b],
 )
-claimable.set(key: payee_b, value: wei(amount_b))
+claimable.set(key: payee_b, value: wei(payouts[1]))
 ```
 
 ## Architecture
 
-- `src/lib.fe` contains `largest_remainder_shares_bounded` (1–8 parties), the three-payee wrapper, the `ExactSplitter` contract, and small receiver contracts that exercise normal, rejecting, and reentrant claim paths.
-- `src/tests.fe` covers bounded counts, exact ratios, fractional-remainder ordering, ties, one-wei pools, maximum-`u256` payouts, the Alabama paradox, invalid weights, finalization, and failed/reentrant transfers.
+- `src/lib.fe` contains the const-generic `largest_remainder_shares`, the `ExactSplitter` contract, and small receiver contracts that exercise normal, rejecting, and reentrant claim paths.
+- `src/tests.fe` covers one-, eight-, and twelve-party arrays, the empty-array revert, exact ratios, fractional-remainder ordering, ties, one-wei pools, maximum-`u256` payouts, the Alabama paradox, invalid weights, finalization, and failed/reentrant transfers.
 - `fe.toml` identifies the Fe ingot as `exact_splitter`.
 - `src/generated_vectors.fe` is generated from the shared payout fixture and adds cross-language Fe assertions.
 - `scripts/generate-vectors.mjs` validates the fixture and keeps the generated Fe tests synchronized.
@@ -74,11 +72,12 @@ The tested version for this prototype is `fe 26.5.0 (3dab95f)`. This working rev
 fe test --filter equal_split_gives_remainder_to_first_payee_on_tie
 ```
 
-It verifies that splitting 7 units across weights 1:1:1 produces 3, 2, and 2, and that the results sum to the original 7 units.
+It verifies that splitting 7 units across weights `[1, 1, 1]` produces `[3, 2, 2]`, and that the results sum to the original 7 units.
 
 ## Limitations
 
-- The contract supports exactly three payees, native ETH, and one settlement round. The pure library supports up to eight parties.
+- The contract supports exactly three payees, native ETH, and one settlement round. The pure library accepts any array length `N >= 1`, subject to the weight-total bound and gas.
+- Allocator gas grows with `N`: weight validation and base shares are linear, and awarding the `leftover < N` remaining wei scans all parties per award, so the worst case is quadratic in `N`. Each distinct `N` is a separate monomorphized copy in the bytecode.
 - The creator controls when contributions close. Contributors should agree on that trust assumption before depositing. There is no refund path.
 - The allocation order is fixed at deployment; payee A wins ties when fractional remainders are equal.
 - Largest remainder can exhibit the Alabama paradox: with weights `1:3:3`, a pool of 3 units allocates `1/1/1`, while 4 units allocates `0/2/2`. This one-shot contract calculates shares only when the creator finalizes, so previously recorded claims do not change; the final amount can affect shares before finalization.
@@ -89,7 +88,7 @@ It verifies that splitting 7 units across weights 1:1:1 produces 3, 2, and 2, an
 
 ## Interactive demo
 
-Open [`demo/index.html`](demo/index.html) in a modern browser to explore exact payouts for 1–8 weighted payees. The page accepts integer amounts in wei up to `2^256 - 1`, shows each base share and fractional remainder, and marks the one-wei awards and tie order. The `3 → 4 wei paradox` preset reproduces the Alabama-paradox test case: with weights `1:3:3`, Payee A falls from 1 wei to 0 when the pool grows from 3 to 4 wei. It uses JavaScript `BigInt`, makes no network requests, and never connects a wallet. It is an educational reference view; the Fe implementation remains authoritative.
+Open [`demo/index.html`](demo/index.html) in a modern browser to explore exact payouts for 1–8 weighted payees (a demo UI limit; the Fe allocator has no fixed party cap). The page accepts integer amounts in wei up to `2^256 - 1`, shows each base share and fractional remainder, and marks the one-wei awards and tie order. The `3 → 4 wei paradox` preset reproduces the Alabama-paradox test case: with weights `1:3:3`, Payee A falls from 1 wei to 0 when the pool grows from 3 to 4 wei. It uses JavaScript `BigInt`, makes no network requests, and never connects a wallet. It is an educational reference view; the Fe implementation remains authoritative.
 
 ## Contract demo
 
@@ -101,23 +100,13 @@ fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 
 ## Shared allocation vectors
 
-The offline browser explorer and Node use the same allocation module. A JSON fixture holds exact payouts for tie ordering, one and eight payees, maximum total weight, the Alabama paradox, and maximum-u256 arithmetic. A generator turns those same vectors into Fe tests, so the browser calculation and the Fe implementation check against identical expected outputs. Locally, run `node scripts/generate-vectors.mjs --check` and `node --test demo/allocator.test.js demo/page.test.js` before the Fe commands. CI runs these checks plus Fe formatting, tests, and build. Fe remains the authoritative implementation; the browser is an educational view.
-
-## Verification record
-Local candidate verification on Windows: shared-vector sync passed, Node checks passed 13/13, Fe tests passed 27/27, Fe formatting passed, and Fe build passed. This is local evidence, not a GitHub Actions status for the candidate commit.
-
-
-The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43343503705) with Fe 26.5.0, formatting, 20 tests, and the compiler build. Commit `152c874` also passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43345975124); the workflow at those commits did not execute the explorer's JavaScript. These checks apply to the listed commits and do not cover later demo changes.
+The offline browser explorer and Node use the same allocation module. A JSON fixture holds exact payouts for tie ordering, one and eight payees, maximum total weight, the Alabama paradox, and maximum-u256 arithmetic. A generator turns those same vectors into Fe tests that pass each case's weights at their natural array length, so the browser calculation and the Fe implementation check against identical expected outputs. Locally, run `node scripts/generate-vectors.mjs --check` and `node --test demo/allocator.test.js demo/page.test.js` before the Fe commands. CI runs these checks plus Fe formatting, tests, and build. Fe remains the authoritative implementation; the browser is an educational view.
 
 ## Declaration
 
 - **Pre-existing work:** The project began from the official Fe Builders Challenge starter at commit `f9d9aa92a03af82c2bbb0dc2e0810244eb13e686`. The starter supplied the ingot layout, Apache-2.0 license, CI workflow, and a sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
 - **Third-party code:** Starter scaffolding and CI from [`fe-lang/builders-challenge-starter`](https://github.com/fe-lang/builders-challenge-starter), under Apache-2.0. The Fe compiler and standard library are used as published by the Fe project.
-- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation, tests, offline allocation explorer, and README. Claude Code (Opus) provided read-only reviews; its feedback informed the bounded allocator and documentation of the allocation tradeoff. GitHub Actions runs generated-vector synchronization, Node tests, Fe formatting and tests, and the compiler build with Fe 26.5.0.
-
-## Submission status
-
-Project FE-051 is registered for the Fe Builders Challenge. Each exact commit must be submitted through the project's personal link. A receipt means validation is pending, not that the project has been accepted. Check the latest receipt and validation email for the current commit status.
+- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation, tests, offline allocation explorer, and README. Claude Code (Opus) provided read-only reviews; its feedback informed the const-generic allocator and documentation of the allocation tradeoff. GitHub Actions runs generated-vector synchronization, Node tests, Fe formatting and tests, and the compiler build with Fe 26.5.0.
 
 ## License
 
