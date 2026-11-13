@@ -98,7 +98,7 @@ fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 
 ## Verification record
 
-The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43343503705) with Fe 26.5.0, formatting, 20 tests, and the compiler build. Commit `152c874` also passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43345975124); the Fe workflow does not execute the explorer's JavaScript. The latest FE-051 submission is commit `152c874`; its receipt says validation is pending and is not acceptance.
+The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43343503705) with Fe 26.5.0, formatting, 20 tests, and the compiler build. Commit `152c874` also passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43345975124); the Fe workflow does not execute the explorer's JavaScript. These checks apply to the listed commits and do not cover later demo changes.
 
 ## Declaration
 
@@ -108,7 +108,7 @@ The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://gith
 
 ## Submission status
 
-Project `FE-051` is registered for the Fe Builders Challenge. The latest form submission is commit `152c874`; the form shows it as received and pending validation, which does not confirm acceptance. The later documentation-only commits are not separate contest submissions; the submitted code remains available at `152c874`. Technical eligibility is reviewed separately. The responsible human contact details are held privately by the organizers.
+Project `FE-051` is registered for the Fe Builders Challenge. The form returned a receipt for commit `152c874` marked pending validation; a receipt is not acceptance. Each later commit must be submitted explicitly, and its own validation email is the evidence of technical eligibility. The responsible human contact details are held privately by the organizers.
 
 ## License
 
