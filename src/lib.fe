@@ -5,6 +5,71 @@ use std::evm::wei
 /// The weight total is capped so every remainder-times-weight intermediate
 /// stays below 10^36, even when `amount` is the largest u256 value.
 pub const MAX_TOTAL_WEIGHT: u256 = 1_000_000_000_000_000_000
+pub const MAX_ALLOCATION_PARTIES: usize = 8
+
+/// Splits an amount among 1 to 8 parties using largest remainders.
+///
+/// Only the first `count` weights are read. Unused payout slots are zero.
+/// Equal fractional remainders are awarded in ascending index order.
+pub fn largest_remainder_shares_bounded(
+    amount: u256,
+    weights: [u256; 8],
+    count: usize,
+) -> [u256; 8] {
+    assert!(
+        count > 0 && count <= MAX_ALLOCATION_PARTIES,
+        "Invalid party count",
+    )
+
+    var total_weight: u256 = 0
+    for index in 0 .. count {
+        let weight = weights[index]
+        assert!(weight > 0, "Weight is zero")
+        assert!(
+            weight <= MAX_TOTAL_WEIGHT - total_weight,
+            "Weight total too large",
+        )
+        total_weight += weight
+    }
+
+    let quotient = amount / total_weight
+    let remainder = amount % total_weight
+    var payouts: [u256; 8] = [0; 8]
+    var fractions: [u256; 8] = [0; 8]
+    var selected: [bool; 8] = [false; 8]
+    var base_total: u256 = 0
+
+    for index in 0 .. count {
+        let weight = weights[index]
+        let base = quotient * weight + (remainder * weight) / total_weight
+        payouts[index] = base
+        fractions[index] = (remainder * weight) % total_weight
+        base_total += base
+    }
+
+    let leftover = amount - base_total
+    var awarded: u256 = 0
+    for _ in 0 .. count {
+        if awarded < leftover {
+            var found = false
+            var best_index: usize = 0
+            var best_fraction: u256 = 0
+            for index in 0 .. count {
+                if !selected[index] && (!found || fractions[index] > best_fraction) {
+                    found = true
+                    best_index = index
+                    best_fraction = fractions[index]
+                }
+            }
+            assert!(found, "No unselected party")
+            selected[best_index] = true
+            payouts[best_index] += 1
+            awarded += 1
+        }
+    }
+
+    payouts
+}
 
 /// Splits an amount by weight using the largest-remainder method.
 ///
@@ -17,58 +82,12 @@ pub fn largest_remainder_shares(amount: u256, weight_a: u256, weight_b: u256, we
     u256,
     u256,
 ) {
-    assert!(weight_a > 0, "Weight is zero")
-    assert!(weight_b > 0, "Weight is zero")
-    assert!(weight_c > 0, "Weight is zero")
-    let total_weight = weight_a + weight_b + weight_c
-    assert!(total_weight <= MAX_TOTAL_WEIGHT, "Weight total too large")
-
-    let quotient = amount / total_weight
-    let remainder = amount % total_weight
-    let base_a = quotient * weight_a + (remainder * weight_a) / total_weight
-    let base_b = quotient * weight_b + (remainder * weight_b) / total_weight
-    let base_c = quotient * weight_c + (remainder * weight_c) / total_weight
-    let fractional_a = (remainder * weight_a) % total_weight
-    let fractional_b = (remainder * weight_b) % total_weight
-    let fractional_c = (remainder * weight_c) % total_weight
-    let leftover = amount - base_a - base_b - base_c
-
-    var payout_a = base_a
-    var payout_b = base_b
-    var payout_c = base_c
-
-    if leftover > 0 {
-        if fractional_a >= fractional_b && fractional_a >= fractional_c {
-            payout_a += 1
-            if leftover > 1 {
-                if fractional_b >= fractional_c {
-                    payout_b += 1
-                } else {
-                    payout_c += 1
-                }
-            }
-        } else if fractional_b >= fractional_a && fractional_b >= fractional_c {
-            payout_b += 1
-            if leftover > 1 {
-                if fractional_a >= fractional_c {
-                    payout_a += 1
-                } else {
-                    payout_c += 1
-                }
-            }
-        } else {
-            payout_c += 1
-            if leftover > 1 {
-                if fractional_a >= fractional_b {
-                    payout_a += 1
-                } else {
-                    payout_b += 1
-                }
-            }
-        }
-    }
-
-    (payout_a, payout_b, payout_c)
+    let payouts = largest_remainder_shares_bounded(
+        amount: amount,
+        weights: [weight_a, weight_b, weight_c, 0, 0, 0, 0, 0],
+        count: 3,
+    )
+    (payouts[0], payouts[1], payouts[2])
 }
 
 msg SplitterMsg {
