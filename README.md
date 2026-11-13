@@ -1,6 +1,6 @@
 # ExactSplitter
 
-**Pitch:** ExactSplitter splits pooled ETH among three fixed payees by weight, with deterministic pull claims and no rounding dust, even when the pool amount is close to the full `u256` range.
+**Pitch:** ExactSplitter splits pooled ETH among three fixed payees by weight, awards rounding wei to the largest fractional shares, and supports amounts near the full `u256` range.
 
 ## The problem
 
@@ -10,18 +10,25 @@ Integer token amounts cannot represent fractional wei. A common allocation formu
 
 `ExactSplitter` is a one-shot ETH pool for three fixed payees. The creator fixes unique payee addresses and positive weights at deployment. Contributors deposit ETH. The creator then finalizes the pool, which closes deposits and records each payee's claimable amount. Each payee withdraws their own amount separately.
 
-For a total amount `A`, total weight `D`, and cumulative boundary `p`, the library computes:
+For total amount `A`, total weight `D`, and each payee weight `w[i]`, the library first computes:
 
 ```text
 q = A / D
 r = A % D
-F(p) = q * p + floor(r * p / D)
-share[a, b) = F(b) - F(a)
+base[i] = q * w[i] + floor(r * w[i] / D)
+fraction[i] = (r * w[i]) % D
+leftover = A - sum(base)
 ```
 
-This is exactly `floor(A * p / D)` without multiplying the full amount by the weight. Since `0 <= p <= D`, `q * p <= A`; the configured maximum denominator keeps `r * p < 10^36`, which is safely within `u256`. Consecutive interval shares telescope: their sum is `F(D) - F(0) = A`. Any indivisible remainder is assigned deterministically by payee order, so no wei is stranded.
+It adds one wei to each of the `leftover` payees with the largest fractional remainder. Ties go to payee A, then B, then C. The full amount is never multiplied by a weight: `q * w[i] <= A`, and the weight cap keeps `r * w[i] < 10^36`, safely within `u256`. The three payouts always add up to the pool, including one-wei pools and amounts near the `u256` limit.
 
 The contract uses pull payments. It clears a payee's entitlement before the external value transfer, so a failed transfer reverts atomically and a reentrant claim sees no remaining entitlement.
+
+## Usage lifecycle
+
+Deploy with three distinct payee addresses and a positive weight for each address. The constructor takes the values as `(payee A, weight A, payee B, weight B, payee C, weight C)`; weights are relative, so `1:1:1` and `2:1:1` both work. Contributors call the payable `deposit()` function, and the creator calls `finalize()` once funding is complete. Each payee then calls `claim()` to withdraw its recorded share. `claimable(address)` lets a payee check its amount before withdrawing.
+
+The pool is intentionally one-shot: finalization permanently closes deposits, and there is no refund path. Contributors should agree on the payees, weights, and who controls finalization before sending ETH.
 
 ## Fe highlight
 
@@ -29,19 +36,19 @@ Fe's typed `Wei` values keep ETH amounts separate from ordinary integers. The co
 
 ```fe
 let amount = total_funded.as_wei()
-let payout_b = wei(share_amount(
+let (amount_a, amount_b, amount_c) = largest_remainder_shares(
     amount: amount,
-    previous_weight: boundary_a,
-    cumulative_weight: boundary_b,
-    total_weight: total_weight,
-))
-claimable.set(key: payee_b, value: payout_b)
+    weight_a: weight_a,
+    weight_b: weight_b,
+    weight_c: weight_c,
+)
+claimable.set(key: payee_b, value: wei(amount_b))
 ```
 
 ## Architecture
 
-- `src/lib.fe` contains `cumulative_amount`, `share_amount`, the `ExactSplitter` contract, and a small payable `ClaimForwarder` used to exercise contract recipients.
-- `src/tests.fe` covers exact ratios, uneven and one-wei pools, maximum-`u256` arithmetic, invalid ranges, zero-weight constructor rejection, finalization, and contract payees.
+- `src/lib.fe` contains the `largest_remainder_shares` allocator, the `ExactSplitter` contract, and a small payable `ClaimForwarder` used to exercise contract recipients.
+- `src/tests.fe` covers exact ratios, fractional-remainder ordering, ties, one-wei pools, maximum-`u256` arithmetic, invalid weights, finalization, and contract payees.
 - `fe.toml` identifies the Fe ingot as `exact_splitter`.
 - `.github/workflows/ci.yml` runs formatting, tests, and compilation with Fe 26.5.0.
 
@@ -59,16 +66,16 @@ fe build
 The tested version for this prototype is `fe 26.5.0 (3dab95f)`. The current test suite has 12 passing tests. A short reproducible example is:
 
 ```sh
-fe test --filter equal_split_assigns_every_remainder_unit
+fe test --filter equal_split_gives_remainder_to_first_payee_on_tie
 ```
 
-It verifies that splitting 7 units across weights 1:1:1 produces 2, 2, and 3, and that the results sum to the original 7 units.
+It verifies that splitting 7 units across weights 1:1:1 produces 3, 2, and 2, and that the results sum to the original 7 units.
 
 ## Limitations
 
 - The contract supports exactly three payees, native ETH, and one settlement round.
 - The creator controls when contributions close. Contributors should agree on that trust assumption before depositing. There is no refund path.
-- The allocation order is fixed at deployment; later payees can receive indivisible remainder units.
+- The allocation order is fixed at deployment; payee A wins ties when fractional remainders are equal.
 - The contract accounts for deposits made through `deposit()`. ETH forced into the contract outside that function is not included in `total_funded` and cannot be claimed by this prototype.
 - A payee contract that rejects plain ETH transfers cannot claim until it can accept the transfer. A failed attempt leaves its entitlement unchanged.
 - A contract payee must be able to call `claim()` itself; a contract that cannot originate that call cannot withdraw.
@@ -76,7 +83,7 @@ It verifies that splitting 7 units across weights 1:1:1 produces 2, 2, and 3, an
 
 ## Demo
 
-The tests deploy the contract in Fe's local EVM, deposit 7 wei, finalize, check claimable shares of 2/2/3, and have a contract payee claim successfully. Run:
+The tests deploy the contract in Fe's local EVM, deposit 7 wei, finalize, check claimable shares of 3/2/2, and have a contract payee claim successfully. Run:
 
 ```sh
 fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
@@ -90,11 +97,11 @@ The original submitted commit, [`fbf0df4`](https://github.com/KlenchoxD/exact-sp
 
 - **Pre-existing work:** The project began from the official Fe Builders Challenge starter at commit `f9d9aa92a03af82c2bbb0dc2e0810244eb13e686`. The starter supplied the ingot layout, Apache-2.0 license, CI workflow, and a sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
 - **Third-party code:** Starter scaffolding and CI from [`fe-lang/builders-challenge-starter`](https://github.com/fe-lang/builders-challenge-starter), under Apache-2.0. The Fe compiler and standard library are used as published by the Fe project.
-- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation and tests, and draft this README. Claude Code (Opus) performed a read-only static review of the implementation, tests, and documentation and suggested follow-up changes; those suggestions have not been applied. GitHub Actions runs formatting, the test suite, and the compiler build with Fe 26.5.0.
+- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation and tests, and draft this README. A read-only review in the existing Claude Code (Opus) session is still in progress; its feedback has not informed this revision. GitHub Actions runs formatting, the test suite, and the compiler build with Fe 26.5.0.
 
-## Team
+## Submission status
 
-The project is registered for the Fe Builders Challenge. The final entry was submitted on November 12, 2026, using commit `fbf0df4275f73850434f4b54a25ee4a8152221a3`. The organizers' form returned a receipt, but validation is pending and acceptance has not been confirmed. One responsible human contact reachable by email is on file with the organizers; private contact details and the submission link are intentionally not published here.
+Project `FE-051` is registered for the Fe Builders Challenge. The registration email confirms the project ID and private submission link, and states that the latest valid submission before the deadline counts. I have not located an email confirming that the latest submission passed automated checks, so its acceptance status remains unverified. Technical eligibility is reviewed separately. The responsible human contact details are held privately by the organizers.
 
 ## License
 

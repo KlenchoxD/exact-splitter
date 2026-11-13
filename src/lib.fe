@@ -2,51 +2,73 @@ use std::abi::sol
 use std::evm::StorageMap
 use std::evm::wei
 
-/// Weight denominator is capped so the remainder-times-prefix intermediate is
-/// proven to stay below 10^36, even when `amount` is the largest u256 value.
+/// The weight total is capped so every remainder-times-weight intermediate
+/// stays below 10^36, even when `amount` is the largest u256 value.
 pub const MAX_TOTAL_WEIGHT: u256 = 1_000_000_000_000_000_000
 
-/// Returns the amount assigned through a cumulative weight boundary.
+/// Splits an amount by weight using the largest-remainder method.
 ///
-/// Splitting `amount` into quotient and remainder first avoids the unsafe
-/// `amount * prefix / total` intermediate. The quotient product is at most
-/// `amount`; the remainder product is bounded by MAX_TOTAL_WEIGHT squared.
-pub fn cumulative_amount(amount: u256, prefix_weight: u256, total_weight: u256) -> u256 {
-    assert!(total_weight > 0, "Weight total is zero")
+/// Quotient/remainder decomposition avoids multiplying the full amount by a
+/// weight. Each leftover wei goes to the largest fractional remainder; ties
+/// are resolved by argument order (A, then B, then C). The results sum exactly
+/// to `amount`.
+pub fn largest_remainder_shares(amount: u256, weight_a: u256, weight_b: u256, weight_c: u256) -> (
+    u256,
+    u256,
+    u256,
+) {
+    assert!(weight_a > 0, "Weight is zero")
+    assert!(weight_b > 0, "Weight is zero")
+    assert!(weight_c > 0, "Weight is zero")
+    let total_weight = weight_a + weight_b + weight_c
     assert!(total_weight <= MAX_TOTAL_WEIGHT, "Weight total too large")
-    assert!(prefix_weight <= total_weight, "Prefix exceeds total")
 
     let quotient = amount / total_weight
     let remainder = amount % total_weight
-    quotient * prefix_weight + (remainder * prefix_weight) / total_weight
-}
+    let base_a = quotient * weight_a + (remainder * weight_a) / total_weight
+    let base_b = quotient * weight_b + (remainder * weight_b) / total_weight
+    let base_c = quotient * weight_c + (remainder * weight_c) / total_weight
+    let fractional_a = (remainder * weight_a) % total_weight
+    let fractional_b = (remainder * weight_b) % total_weight
+    let fractional_c = (remainder * weight_c) % total_weight
+    let leftover = amount - base_a - base_b - base_c
 
-/// Returns a group's exact payout between two cumulative weight boundaries.
-///
-/// For contiguous groups, the first boundary starts at zero and the final
-/// boundary equals `total_weight`; therefore all payouts sum to `amount`.
-pub fn share_amount(
-    amount: u256,
-    previous_weight: u256,
-    cumulative_weight: u256,
-    total_weight: u256,
-) -> u256 {
-    assert!(
-        previous_weight <= cumulative_weight,
-        "Weight range is reversed",
-    )
-    assert!(cumulative_weight <= total_weight, "Prefix exceeds total")
-    let upper = cumulative_amount(
-        amount: amount,
-        prefix_weight: cumulative_weight,
-        total_weight: total_weight,
-    )
-    let lower = cumulative_amount(
-        amount: amount,
-        prefix_weight: previous_weight,
-        total_weight: total_weight,
-    )
-    upper - lower
+    var payout_a = base_a
+    var payout_b = base_b
+    var payout_c = base_c
+
+    if leftover > 0 {
+        if fractional_a >= fractional_b && fractional_a >= fractional_c {
+            payout_a += 1
+            if leftover > 1 {
+                if fractional_b >= fractional_c {
+                    payout_b += 1
+                } else {
+                    payout_c += 1
+                }
+            }
+        } else if fractional_b >= fractional_a && fractional_b >= fractional_c {
+            payout_b += 1
+            if leftover > 1 {
+                if fractional_a >= fractional_c {
+                    payout_a += 1
+                } else {
+                    payout_c += 1
+                }
+            }
+        } else {
+            payout_c += 1
+            if leftover > 1 {
+                if fractional_a >= fractional_b {
+                    payout_a += 1
+                } else {
+                    payout_b += 1
+                }
+            }
+        }
+    }
+
+    (payout_a, payout_b, payout_c)
 }
 
 msg SplitterMsg {
@@ -115,8 +137,8 @@ struct Claimed {
 /// A one-shot ETH pool that allocates every wei across three fixed payees.
 ///
 /// The creator freezes contributions with `finalize`; each payee withdraws
-/// separately. Settlement uses telescoping cumulative floors, so rounding
-/// dust is assigned deterministically and the pool never strands a remainder.
+/// separately. Settlement uses largest remainders, so each wei goes to the
+/// payee whose fractional share is largest; ties follow deployment order.
 pub contract ExactSplitter uses (ctx: Ctx, call: mut Call, log: mut Log) {
     creator: Address,
     payee_a: Address,
@@ -205,32 +227,15 @@ pub contract ExactSplitter uses (ctx: Ctx, call: mut Call, log: mut Log) {
             assert!(total_funded > Wei::zero(), "Pool is empty")
 
             let amount = total_funded.as_wei()
-            let boundary_a = weight_a
-            let boundary_b = weight_a + weight_b
-            let payout_a = wei(
-                share_amount(
-                    amount: amount,
-                    previous_weight: 0,
-                    cumulative_weight: boundary_a,
-                    total_weight: total_weight,
-                ),
+            let (amount_a, amount_b, amount_c) = largest_remainder_shares(
+                amount: amount,
+                weight_a: weight_a,
+                weight_b: weight_b,
+                weight_c: total_weight - weight_a - weight_b,
             )
-            let payout_b = wei(
-                share_amount(
-                    amount: amount,
-                    previous_weight: boundary_a,
-                    cumulative_weight: boundary_b,
-                    total_weight: total_weight,
-                ),
-            )
-            let payout_c = wei(
-                share_amount(
-                    amount: amount,
-                    previous_weight: boundary_b,
-                    cumulative_weight: total_weight,
-                    total_weight: total_weight,
-                ),
-            )
+            let payout_a = wei(amount_a)
+            let payout_b = wei(amount_b)
+            let payout_c = wei(amount_c)
 
             claimable.set(key: payee_a, value: payout_a)
             claimable.set(key: payee_b, value: payout_b)

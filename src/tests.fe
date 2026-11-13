@@ -1,52 +1,43 @@
-use ingot::{ClaimForwarder, ExactSplitter, PayeeMsg, SplitterMsg, cumulative_amount, share_amount}
+use ingot::{ClaimForwarder, ExactSplitter, PayeeMsg, SplitterMsg, largest_remainder_shares}
 use std::evm::{wei, Evm}
 
 #[test]
-fn equal_split_assigns_every_remainder_unit() {
-    let first = share_amount(
+fn equal_split_gives_remainder_to_first_payee_on_tie() {
+    let (first, second, third) = largest_remainder_shares(
         amount: 7,
-        previous_weight: 0,
-        cumulative_weight: 1,
-        total_weight: 3,
-    )
-    let second = share_amount(
-        amount: 7,
-        previous_weight: 1,
-        cumulative_weight: 2,
-        total_weight: 3,
-    )
-    let third = share_amount(
-        amount: 7,
-        previous_weight: 2,
-        cumulative_weight: 3,
-        total_weight: 3,
+        weight_a: 1,
+        weight_b: 1,
+        weight_c: 1,
     )
 
-    assert!(first == 2)
+    assert!(first == 3)
     assert!(second == 2)
-    assert!(third == 3)
+    assert!(third == 2)
+    assert!(first + second + third == 7)
+}
+
+#[test]
+fn largest_fractional_remainder_gets_the_leftover_wei() {
+    let (first, second, third) = largest_remainder_shares(
+        amount: 7,
+        weight_a: 3,
+        weight_b: 1,
+        weight_c: 1,
+    )
+
+    assert!(first == 4)
+    assert!(second == 2)
+    assert!(third == 1)
     assert!(first + second + third == 7)
 }
 
 #[test]
 fn weighted_split_matches_exact_ratios() {
-    let first = share_amount(
+    let (first, second, third) = largest_remainder_shares(
         amount: 100,
-        previous_weight: 0,
-        cumulative_weight: 2,
-        total_weight: 10,
-    )
-    let second = share_amount(
-        amount: 100,
-        previous_weight: 2,
-        cumulative_weight: 5,
-        total_weight: 10,
-    )
-    let third = share_amount(
-        amount: 100,
-        previous_weight: 5,
-        cumulative_weight: 10,
-        total_weight: 10,
+        weight_a: 2,
+        weight_b: 3,
+        weight_c: 5,
     )
 
     assert!(first == 20)
@@ -57,70 +48,43 @@ fn weighted_split_matches_exact_ratios() {
 
 #[test]
 fn one_wei_pool_is_not_stranded() {
-    let first = share_amount(
+    let (first, second, third) = largest_remainder_shares(
         amount: 1,
-        previous_weight: 0,
-        cumulative_weight: 1,
-        total_weight: 3,
-    )
-    let second = share_amount(
-        amount: 1,
-        previous_weight: 1,
-        cumulative_weight: 2,
-        total_weight: 3,
-    )
-    let last = share_amount(
-        amount: 1,
-        previous_weight: 2,
-        cumulative_weight: 3,
-        total_weight: 3,
+        weight_a: 1,
+        weight_b: 1,
+        weight_c: 1,
     )
 
-    assert!(first == 0)
+    assert!(first == 1)
     assert!(second == 0)
-    assert!(last == 1)
-    assert!(first + second + last == 1)
+    assert!(third == 0)
+    assert!(first + second + third == 1)
 }
 
 #[test]
 fn maximum_u256_amount_does_not_overflow_intermediates() {
     let maximum: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935
-    let first = share_amount(
+    let (first, second, third) = largest_remainder_shares(
         amount: maximum,
-        previous_weight: 0,
-        cumulative_weight: 499_999_999_999_999_999,
-        total_weight: 1_000_000_000_000_000_000,
+        weight_a: 499_999_999_999_999_999,
+        weight_b: 500_000_000_000_000_000,
+        weight_c: 1,
     )
-    let second = share_amount(
-        amount: maximum,
-        previous_weight: 499_999_999_999_999_999,
-        cumulative_weight: 1_000_000_000_000_000_000,
-        total_weight: 1_000_000_000_000_000_000,
-    )
-    assert!(first + second == maximum)
+    assert!(first + second + third == maximum)
 }
 
 #[test(should_revert)]
-fn zero_total_weight_is_rejected() {
-    cumulative_amount(amount: 10, prefix_weight: 0, total_weight: 0)
-}
-
-#[test(should_revert)]
-fn reversed_weight_range_is_rejected() {
-    share_amount(
-        amount: 10,
-        previous_weight: 2,
-        cumulative_weight: 1,
-        total_weight: 3,
-    )
+fn zero_weight_is_rejected() {
+    largest_remainder_shares(amount: 10, weight_a: 1, weight_b: 0, weight_c: 1)
 }
 
 #[test(should_revert)]
 fn excessive_denominator_is_rejected() {
-    cumulative_amount(
+    largest_remainder_shares(
         amount: 10,
-        prefix_weight: 1_000_000_000_000_000_001,
-        total_weight: 1_000_000_000_000_000_001,
+        weight_a: 1_000_000_000_000_000_000,
+        weight_b: 1,
+        weight_c: 1,
     )
 }
 
@@ -177,9 +141,9 @@ uses (evm: mut Evm)
             value: wei(0),
             message: SplitterMsg::Claimable { account: payee_c },
         )
-    assert!(creator_due == wei(2))
+    assert!(creator_due == wei(3))
     assert!(second_due == wei(2))
-    assert!(third_due == wei(3))
+    assert!(third_due == wei(2))
     assert!(creator_due + second_due + third_due == wei(7))
 
     let paid: Wei = evm
@@ -262,10 +226,10 @@ fn only_creator_can_finalize() uses (evm: mut Evm) {
         )
 }
 
-#[test(should_revert, balance = 10_000_000_000_000_000_000)]
+#[test(balance = 10_000_000_000_000_000_000)]
 fn claim_cannot_be_replayed() uses (evm: mut Evm) {
     let creator = evm.address()
-    let payee_b = Address::new(0xB0B)
+    let payee_b: Address = evm.create2<ClaimForwarder>(value: wei(0), args: (), salt: 1)
     let payee_c = Address::new(0xC0C)
     let splitter = evm
         .create2<ExactSplitter>(
@@ -295,13 +259,14 @@ fn claim_cannot_be_replayed() uses (evm: mut Evm) {
             message: PayeeMsg::ClaimFrom { splitter },
         )
     assert!(paid == wei(1))
-    let _: Wei = evm
-        .call(
+    let replay = evm
+        .try_call(
             addr: payee_b,
             gas: 200_000,
             value: wei(0),
             message: PayeeMsg::ClaimFrom { splitter },
         )
+    assert!(!replay.success())
 }
 
 #[test(should_revert, balance = 10_000_000_000_000_000_000)]
