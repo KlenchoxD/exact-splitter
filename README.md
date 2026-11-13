@@ -52,7 +52,10 @@ claimable.set(key: payee_b, value: wei(amount_b))
 - `src/lib.fe` contains `largest_remainder_shares_bounded` (1–8 parties), the three-payee wrapper, the `ExactSplitter` contract, and small receiver contracts that exercise normal, rejecting, and reentrant claim paths.
 - `src/tests.fe` covers bounded counts, exact ratios, fractional-remainder ordering, ties, one-wei pools, maximum-`u256` payouts, the Alabama paradox, invalid weights, finalization, and failed/reentrant transfers.
 - `fe.toml` identifies the Fe ingot as `exact_splitter`.
-- `.github/workflows/ci.yml` runs formatting, tests, and compilation with Fe 26.5.0.
+- `src/generated_vectors.fe` is generated from the shared payout fixture and adds cross-language Fe assertions.
+- `scripts/generate-vectors.mjs` validates the fixture and keeps the generated Fe tests synchronized.
+- `demo/page.test.js` exercises the explorer default, paradox preset, and invalid-input state.
+- `.github/workflows/ci.yml` checks vector synchronization, runs Node checks, and runs Fe formatting, tests, and compilation with Fe 26.5.0.
 
 ## Build and test
 
@@ -65,7 +68,7 @@ fe test
 fe build
 ```
 
-The tested version for this prototype is `fe 26.5.0 (3dab95f)`. This working revision has 20 tests. A short reproducible example is:
+The tested version for this prototype is `fe 26.5.0 (3dab95f)`. This working revision has 27 tests. A short reproducible example is:
 
 ```sh
 fe test --filter equal_split_gives_remainder_to_first_payee_on_tie
@@ -96,19 +99,25 @@ The tests deploy the contract in Fe's local EVM, deposit 7 wei, finalize, check 
 fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 ```
 
-## Verification record
+## Shared allocation vectors
 
-The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43343503705) with Fe 26.5.0, formatting, 20 tests, and the compiler build. Commit `152c874` also passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43345975124); the Fe workflow does not execute the explorer's JavaScript. These checks apply to the listed commits and do not cover later demo changes.
+The offline browser explorer and Node use the same allocation module. A JSON fixture holds exact payouts for tie ordering, one and eight payees, maximum total weight, the Alabama paradox, and maximum-u256 arithmetic. A generator turns those same vectors into Fe tests, so the browser calculation and the Fe implementation check against identical expected outputs. Locally, run `node scripts/generate-vectors.mjs --check` and `node --test demo/allocator.test.js demo/page.test.js` before the Fe commands. CI runs these checks plus Fe formatting, tests, and build. Fe remains the authoritative implementation; the browser is an educational view.
+
+## Verification record
+Local candidate verification on Windows: shared-vector sync passed, Node checks passed 13/13, Fe tests passed 27/27, Fe formatting passed, and Fe build passed. This is local evidence, not a GitHub Actions status for the candidate commit.
+
+
+The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43343503705) with Fe 26.5.0, formatting, 20 tests, and the compiler build. Commit `152c874` also passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43345975124); the workflow at those commits did not execute the explorer's JavaScript. These checks apply to the listed commits and do not cover later demo changes.
 
 ## Declaration
 
 - **Pre-existing work:** The project began from the official Fe Builders Challenge starter at commit `f9d9aa92a03af82c2bbb0dc2e0810244eb13e686`. The starter supplied the ingot layout, Apache-2.0 license, CI workflow, and a sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
 - **Third-party code:** Starter scaffolding and CI from [`fe-lang/builders-challenge-starter`](https://github.com/fe-lang/builders-challenge-starter), under Apache-2.0. The Fe compiler and standard library are used as published by the Fe project.
-- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation, tests, offline allocation explorer, and README. Claude Code (Opus) provided read-only reviews; its feedback informed the bounded allocator and documentation of the allocation tradeoff. GitHub Actions runs formatting, the test suite, and the compiler build with Fe 26.5.0.
+- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation, tests, offline allocation explorer, and README. Claude Code (Opus) provided read-only reviews; its feedback informed the bounded allocator and documentation of the allocation tradeoff. GitHub Actions runs generated-vector synchronization, Node tests, Fe formatting and tests, and the compiler build with Fe 26.5.0.
 
 ## Submission status
 
-Project `FE-051` is registered for the Fe Builders Challenge. The form returned a receipt for commit `152c874` marked pending validation; a receipt is not acceptance. Each later commit must be submitted explicitly, and its own validation email is the evidence of technical eligibility. The responsible human contact details are held privately by the organizers.
+Project FE-051 is registered for the Fe Builders Challenge. Each exact commit must be submitted through the project's personal link. A receipt means validation is pending, not that the project has been accepted. Check the latest receipt and validation email for the current commit status.
 
 ## License
 

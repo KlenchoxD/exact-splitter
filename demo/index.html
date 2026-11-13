@@ -125,10 +125,10 @@
       <footer>No wallet connection, network requests, or transactions. This page is an educational reference view of the Fe library; the Fe contract remains authoritative.</footer>
     </main>
 
+    <script src="./allocator.js"></script>
     <script>
       "use strict";
-      const MAX_U256 = (1n << 256n) - 1n;
-      const MAX_TOTAL_WEIGHT = 1_000_000_000_000_000_000n;
+      const { MAX_U256, MAX_TOTAL_WEIGHT, allocate } = window.ExactSplitterAllocator;
       const list = document.getElementById("payee-list");
       const amountInput = document.getElementById("amount");
       const status = document.getElementById("status");
@@ -201,23 +201,9 @@
           }));
           if (recipients.length < 1 || recipients.length > 8) throw new Error("Use between 1 and 8 payees.");
           const totalWeight = recipients.reduce((sum, recipient) => sum + recipient.weight, 0n);
-          if (totalWeight > MAX_TOTAL_WEIGHT) throw new Error("Total weight exceeds 10¹⁸.");
-          const quotient = amount / totalWeight;
-          const remainder = amount % totalWeight;
-          let baseTotal = 0n;
-          const shares = recipients.map(recipient => {
-            const weightedRemainder = remainder * recipient.weight;
-            const base = quotient * recipient.weight + weightedRemainder / totalWeight;
-            const fraction = weightedRemainder % totalWeight;
-            baseTotal += base;
-            return { ...recipient, base, fraction, bonus: false, payout: base };
-          });
-          const leftover = amount - baseTotal;
-          const rank = [...shares].sort((a, b) => a.fraction === b.fraction ? a.index - b.index : (a.fraction > b.fraction ? -1 : 1));
-          for (let i = 0; i < Number(leftover); i++) {
-            rank[i].bonus = true;
-            rank[i].payout += 1n;
-          }
+          const allocation = allocate(amount, recipients.map((recipient) => recipient.weight));
+          const shares = allocation.shares
+            .map((share, index) => ({ ...share, name: recipients[index].name }));
 
           for (const share of shares) {
             const tr = document.createElement("tr");
@@ -233,7 +219,7 @@
           const sum = shares.reduce((total, share) => total + share.payout, 0n);
           document.getElementById("sum-pool").textContent = `${amount} wei`;
           document.getElementById("sum-weight").textContent = totalWeight.toString();
-          document.getElementById("sum-leftover").textContent = leftover.toString();
+          document.getElementById("sum-leftover").textContent = allocation.leftover.toString();
           document.getElementById("result-note").textContent = sum === amount
             ? `All ${sum} wei are allocated. Largest remainders win; ties go to the earlier payee.`
             : "Allocation error: final shares do not equal the pool.";
@@ -242,6 +228,7 @@
           document.getElementById("sum-pool").textContent = "—";
           document.getElementById("sum-weight").textContent = "—";
           document.getElementById("sum-leftover").textContent = "—";
+          document.getElementById("result-note").textContent = "";
         }
       }
 
