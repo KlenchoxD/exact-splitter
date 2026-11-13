@@ -86,7 +86,7 @@ It verifies that splitting 7 units across weights 1:1:1 produces 3, 2, and 2, an
 
 ## Interactive demo
 
-Open [`demo/index.html`](demo/index.html) in a modern browser to explore exact payouts for 1–8 weighted payees. The page accepts integer amounts in wei up to `2^256 - 1`, shows each base share and fractional remainder, and marks the one-wei awards and tie order. It uses JavaScript `BigInt`, makes no network requests, and never connects a wallet. It is an educational reference view; the Fe implementation remains authoritative.
+Open [`demo/index.html`](demo/index.html) in a modern browser to explore exact payouts for 1–8 weighted payees. The page accepts integer amounts in wei up to `2^256 - 1`, shows each base share and fractional remainder, and marks the one-wei awards and tie order. The `3 → 4 wei paradox` preset reproduces the Alabama-paradox test case: with weights `1:3:3`, Payee A falls from 1 wei to 0 when the pool grows from 3 to 4 wei. It uses JavaScript `BigInt`, makes no network requests, and never connects a wallet. It is an educational reference view; the Fe implementation remains authoritative.
 
 ## Contract demo
 

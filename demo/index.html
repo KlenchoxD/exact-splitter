@@ -91,6 +91,7 @@
             <p class="hint" id="amount-hint">Enter a whole number from 0 to 2²⁵⁶−1.</p>
             <div class="quick-actions">
               <button type="button" id="sample-seven">7 wei sample</button>
+              <button type="button" id="sample-paradox">3 → 4 wei paradox</button>
               <button type="button" id="sample-max">Maximum u256</button>
             </div>
           </div>
@@ -251,6 +252,15 @@
         list.replaceChildren();
         nextId = 1;
         addPayee("Payee A", "1"); addPayee("Payee B", "1"); addPayee("Payee C", "1"); calculate();
+      });
+      document.getElementById("sample-paradox").addEventListener("click", () => {
+        amountInput.value = "4";
+        list.replaceChildren();
+        nextId = 1;
+        addPayee("Payee A", "1"); addPayee("Payee B", "3"); addPayee("Payee C", "3");
+        calculate();
+        document.getElementById("result-note").textContent =
+          "Alabama paradox: with weights 1:3:3, a 3-wei pool pays 1:1:1; increasing it to 4 wei pays 0:2:2. A’s share falls even though the pool grew. The Fe test suite covers this case.";
       });
       document.getElementById("sample-max").addEventListener("click", () => {
         amountInput.value = MAX_U256.toString();
