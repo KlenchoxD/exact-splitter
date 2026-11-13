@@ -34,7 +34,7 @@ The pool is intentionally one-shot: finalization permanently closes deposits, an
 
 Fe's typed `Wei` values keep ETH amounts separate from ordinary integers. The contract converts to `u256` only at the pure allocation boundary, then converts the payout back to `Wei`. Fe's explicit `uses` clauses also make storage writes, caller context, logging, and external calls visible at each handler.
 
-The reusable Fe function `largest_remainder_shares` uses a const generic, so the party count is part of the array type. Callers pass `[u256; N]` and receive `[u256; N]`: no padding, no runtime count, and no party cap other than the weight-total bound and gas. The contract passes its three stored weights directly.
+The reusable Fe function `largest_remainder_shares` uses a const generic, so the party count is part of the array type. Callers pass `[u256; N]` and receive `[u256; N]`: no padding, no runtime count, and no party cap other than the weight-total bound and gas. The contract constructs its three weights from the stored A and B weights and their stored total.
 
 ```fe
 let amount = total_funded.as_wei()
@@ -42,7 +42,8 @@ let payouts = largest_remainder_shares(
     amount: amount,
     weights: [weight_a, weight_b, total_weight - weight_a - weight_b],
 )
-claimable.set(key: payee_b, value: wei(payouts[1]))
+let payout_b = wei(payouts[1])
+claimable.set(key: payee_b, value: payout_b)
 ```
 
 ## Architecture
@@ -57,7 +58,14 @@ claimable.set(key: payee_b, value: wei(payouts[1]))
 
 ## Build and test
 
-Use Fe 26.5.0 or later. On Windows, download the matching compiler from the [official Fe release](https://github.com/argotorg/fe/releases) and verify its published SHA-256 digest. Then run from this directory:
+This project is verified with Fe `26.5.0 (3dab95f)`; the contest permits 26.5.0 and later, but newer releases have not been tested here. On Windows, download the matching compiler from the [official Fe release](https://github.com/argotorg/fe/releases) and verify its published SHA-256 digest. On Linux, CI installs the same pinned version with the official `feup` script:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/argotorg/fe/master/feup/feup.sh | bash -s -- --version v26.5.0 --no-modify-path
+export PATH="$HOME/.fe/bin:$PATH"
+```
+
+Then run from this directory:
 
 ```sh
 fe --version
@@ -104,7 +112,7 @@ The offline browser explorer and Node use the same allocation module. A JSON fix
 
 ## Declaration
 
-- **Pre-existing work:** The project began from the official Fe Builders Challenge starter at commit `f9d9aa92a03af82c2bbb0dc2e0810244eb13e686`. The starter supplied the ingot layout, Apache-2.0 license, CI workflow, and a sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
+- **Pre-existing work:** Public history begins at [`5b4ee34`](https://github.com/KlenchoxD/exact-splitter/commit/5b4ee34eb3fcb97b4829804b8911893b3ae522d7), an initial commit with no parent. The project started from the official [Fe Builders Challenge starter](https://github.com/fe-lang/builders-challenge-starter/commit/f9d9aa92a03af82c2bbb0dc2e0810244eb13e686), which supplied the ingot layout, Apache-2.0 license, CI workflow, and sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
 - **Third-party code:** Starter scaffolding and CI from [`fe-lang/builders-challenge-starter`](https://github.com/fe-lang/builders-challenge-starter), under Apache-2.0. The Fe compiler and standard library are used as published by the Fe project.
 - **AI assistance:** ChatGPT and OpenAI Codex helped propose the project and write or revise the Fe implementation, tests, offline allocation explorer, and README. Claude Code (Opus) reviewed the design and implemented the const-generic allocator, related Fe tests, vector-generator updates, and documentation; it also ran the local validation commands. OpenAI Codex reviewed the changes and reran the validation. GitHub Actions runs generated-vector synchronization, Node tests, Fe formatting and tests, and the compiler build with Fe 26.5.0.
 
