@@ -106,7 +106,7 @@ The offline browser explorer and Node use the same allocation module. A JSON fix
 
 - **Pre-existing work:** The project began from the official Fe Builders Challenge starter at commit `f9d9aa92a03af82c2bbb0dc2e0810244eb13e686`. The starter supplied the ingot layout, Apache-2.0 license, CI workflow, and a sample vault. The sample vault was replaced. ExactSplitter and its tests were added during the contest window.
 - **Third-party code:** Starter scaffolding and CI from [`fe-lang/builders-challenge-starter`](https://github.com/fe-lang/builders-challenge-starter), under Apache-2.0. The Fe compiler and standard library are used as published by the Fe project.
-- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project, write and revise the Fe implementation, tests, offline allocation explorer, and README. Claude Code (Opus) provided read-only reviews; its feedback informed the const-generic allocator and documentation of the allocation tradeoff. GitHub Actions runs generated-vector synchronization, Node tests, Fe formatting and tests, and the compiler build with Fe 26.5.0.
+- **AI assistance:** ChatGPT and OpenAI Codex helped propose the project and write or revise the Fe implementation, tests, offline allocation explorer, and README. Claude Code (Opus) reviewed the design and implemented the const-generic allocator, related Fe tests, vector-generator updates, and documentation; it also ran the local validation commands. OpenAI Codex reviewed the changes and reran the validation. GitHub Actions runs generated-vector synchronization, Node tests, Fe formatting and tests, and the compiler build with Fe 26.5.0.
 
 ## License
 
