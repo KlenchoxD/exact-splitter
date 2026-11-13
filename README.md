@@ -96,7 +96,7 @@ fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 
 ## Verification record
 
-The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43343503705) with Fe 26.5.0, formatting, 20 tests, and the compiler build. The offline allocation explorer was added after that CI run and is a separate reference page; the Fe workflow does not execute its JavaScript. FE-051 has a receipt for commit `03ed4e5` with validation pending. This working revision, including the explorer, has not been submitted.
+The Fe contract code at commit `bb327fd` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43343503705) with Fe 26.5.0, formatting, 20 tests, and the compiler build. Commit `152c874` also passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43345975124); the Fe workflow does not execute the explorer's JavaScript. The latest FE-051 submission is commit `152c874`; its receipt says validation is pending and is not acceptance.
 
 ## Declaration
 
