@@ -92,7 +92,7 @@ fe test --filter contract_finalizes_exact_shares_and_pays_contract_payee
 
 ## Verification record
 
-Commit `5cc1be9` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43336922498) with Fe 26.5.0, formatting, 13 tests, and the compiler build. This revision also passed local `fe fmt --check`, all 18 tests, and `fe build` with Fe 26.5.0. It has not yet been pushed or submitted.
+Commit `ec4326d` passed [GitHub Actions CI](https://github.com/KlenchoxD/exact-splitter/actions/runs/43341773414) with Fe 26.5.0, formatting, 18 tests, and the compiler build. The code in this revision also passed local `fe fmt --check`, all 18 tests, and `fe build` with Fe 26.5.0. The revision is on public branch `codex/fe-bounded-allocation`; it has not been submitted to Fe Builders.
 
 ## Declaration
 
